@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.6.0';
+const VERSION = '1.6.1';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -186,7 +186,10 @@ mgu.run({
             onRoute = guard('strip', () => { const r = stripRoute(); strip.update(r, r ? R.arrivalText(r, Date.now()) : null, road()); });
             setInterval(onRoute, 1000);
             const placed = () => say('Moved. Showing a preview on the cluster for 30 seconds.');
-            ui.onClick('BTN_TOGGLE', guard('toggle', () => { strip.toggle(); say(strip.cfg.on ? 'The ETA will show on the cluster during Apple Maps routes.' : 'The ETA is off. BMW\'s strip stays as it is.'); }));
+            // the button says what it will do, so an accidental press is easy to see and undo
+            const toggleLabel = () => { try { ui.text('BTN_TOGGLE', strip.cfg.on ? 'Turn ETA off' : 'Turn ETA on'); } catch (e) { /* */ } };
+            toggleLabel();
+            ui.onClick('BTN_TOGGLE', guard('toggle', () => { strip.toggle(); toggleLabel(); say(strip.cfg.on ? 'The ETA will show on the cluster during Apple Maps routes.' : 'The ETA is off. Press Turn ETA on to bring it back.'); }));
             ui.onClick('BTN_PREVIEW', guard('preview', () => { strip.preview(); say('Showing a preview on the cluster for 30 seconds.'); }));
             ui.onClick('BTN_UP', guard('up', () => { strip.move(0, -1); placed(); }));
             ui.onClick('BTN_DOWN', guard('down', () => { strip.move(0, 1); placed(); }));
