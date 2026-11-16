@@ -20,7 +20,7 @@ const { Canvas } = require('./kit/canvas');
 const SW = 420, SH = 260;                               // the picture
 // its centre on the cluster: where BMW's own widget sits (its icon and "No active entertainment source", measured
 // from Aref's Nov 16 photo: centre x ~1420, y ~292, about 365 x 250 cluster px)
-const DEF = { x: 1420, y: 292, scale: 1 };
+const DEF = { x: 1465, y: 340, scale: 1 };           // (Nov 16: moved toward the gauge's middle, Aref's photo)
 const SLOTS = ['off', 'engine', 'temps', 'g', 'clock', 'music'];
 const MIN_MS = 500;
 const WHITE = [255, 255, 255, 255], GRAY = [152, 152, 159, 255], DIM = [99, 99, 102, 255];
@@ -100,11 +100,11 @@ function draw(c, fonts) {
         cv.text(fit(m.title, 30, SW - 20, B), SW / 2, y0 + n + 42, 30, WHITE, Object.assign({}, B, C));
         cv.text(fit(m.artist, 24, SW - 20, M), SW / 2, y0 + n + 76, 24, GRAY, Object.assign({}, M, { align: 'center' }));
         if (m.dur && m.pos !== null) {
-            const f = Math.max(0, Math.min(1, m.pos / m.dur)), bx = 20, bw = SW - 40, by = SH - 14;
-            cv.roundRect(bx, by, bw, 5, 2.5, [255, 255, 255, 60]);
-            if (f > 0) cv.roundRect(bx, by, Math.max(5, bw * f), 5, 2.5, [255, 106, 0, 255]);
+            const f = Math.max(0, Math.min(1, m.pos / m.dur)), bw = 180, bx = (SW - bw) / 2, by = SH - 14;
+            cv.roundRect(bx, by, bw, 3, 1.5, [255, 255, 255, 60]);
+            if (f > 0) cv.roundRect(bx, by, Math.max(3, bw * f), 3, 1.5, [255, 106, 0, 255]);
             const left = Math.max(0, Math.round((m.dur - m.pos) / 1000));
-            cv.text(Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + (left % 60), SW - 20, by - 8, 20, GRAY, Object.assign({}, M, { align: 'right' }));
+            cv.text(Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + (left % 60), bx + bw + 10, by + 6, 18, GRAY, M);
         }
     }
     return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length);
@@ -112,16 +112,19 @@ function draw(c, fonts) {
 
 const BW = 300, BH = 300;                              // the backdrop's picture
 // its rect, from the slot's centre: the right gauge's inside, as BMW's own music widget fills it
-const BG = { dx: 40, dy: 20, w: 560, h: 560 };
+const BG = { dx: 15, dy: 15, w: 520, h: 500 };
 
 /** The backdrop: the cover (RGBA square px, side n) dimmed to 55 % and faded out to the left, right, top and bottom. */
 function drawBackdrop(px, n) {
     const out = Buffer.alloc(BW * BH * 4);
     for (let y = 0; y < BH; y++) {
-        const fy = Math.min(1, y / (BH * 0.18), (BH - 1 - y) / (BH * 0.28));
+        const fy = Math.min(1, y / (BH * 0.2), (BH - 1 - y) / (BH * 0.25));
         for (let x = 0; x < BW; x++) {
-            const fx = Math.min(1, x / (BW * 0.45), (BW - 1 - x) / (BW * 0.2));
-            const a = Math.max(0, Math.min(1, fx * fx * (3 - 2 * fx))) * Math.max(0, fy);
+            // a short, smooth fade into the map on the left; the top right corner kept clear of the tach's red line
+            const fx = Math.min(1, x / (BW * 0.22), (BW - 1 - x) / (BW * 0.18));
+            const corner = Math.min(1, Math.hypot(BW - x, y) / (BW * 0.62));
+            const s1 = (v) => { v = Math.max(0, Math.min(1, v)); return v * v * (3 - 2 * v); };
+            const a = s1(fx) * s1(fy) * s1(corner);
             const si = ((Math.floor(y * n / BH) * n) + Math.floor(x * n / BW)) * 4, di = (y * BW + x) * 4;
             out[di] = px[si] * 0.55; out[di + 1] = px[si + 1] * 0.55; out[di + 2] = px[si + 2] * 0.55; out[di + 3] = Math.round(a * 235);
         }

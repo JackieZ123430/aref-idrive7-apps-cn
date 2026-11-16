@@ -114,7 +114,7 @@ class Strip {
                 sampling: 'bilinear', fps: 2, visible: false });
             this.island = new ISL.Island(cr, this.note);
             this.island.create(this.cfg.islandMap, IW, IH, 'map', this.style.look);
-            this.slot = new SLOT.Slot(cr, this.fonts, this.note, this.cfg.slot2);
+            this.slot = new SLOT.Slot(cr, this.fonts, this.note, this.cfg.slot3);
             this.slot.create();
             cr.connect();
         } catch (e) {
@@ -231,7 +231,7 @@ class Strip {
 
     /** Where the current preset sits: the bottom strip's place (cfg) or the island's (cfg.island). */
     spot() {
-        if (this.moving === 'slot') return (this.cfg.slot2 = Object.assign({}, SLOT.DEF, this.cfg.slot2));
+        if (this.moving === 'slot') return (this.cfg.slot3 = Object.assign({}, SLOT.DEF, this.cfg.slot3));
         return this.style.preset === 'island' ? this.cfg.islandMap : this.cfg;
     }
 
@@ -240,7 +240,7 @@ class Strip {
             const r = this.rect();
             if (this.cr && this.ref) this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h });
             if (this.island) this.island.move(this.cfg.islandMap);
-            if (this.slot) this.slot.move(this.cfg.slot2);
+            if (this.slot) this.slot.move(this.cfg.slot3);
         } catch (e) { /* next */ }
         this.save();
     }
@@ -252,7 +252,7 @@ class Strip {
     }
     size(d) { const o = this.spot(); o.scale = clamp(Math.round((o.scale + d * STEP.scale) * 10) / 10, LIMIT.scale); this.place(); this.preview(); }
     reset() {
-        if (this.moving === 'slot') this.cfg.slot2 = Object.assign({}, SLOT.DEF);
+        if (this.moving === 'slot') this.cfg.slot3 = Object.assign({}, SLOT.DEF);
         else if (this.style.preset === 'island') this.cfg.islandMap = Object.assign({}, DEF_ISLAND);
         else this.cfg = Object.assign({}, DEF, { on: this.cfg.on, islandMap: this.cfg.islandMap });
         this.place(); this.preview();
