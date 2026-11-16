@@ -17,8 +17,10 @@
  */
 const { Canvas } = require('./kit/canvas');
 
-const SW = 420, SH = 190;                               // the picture
-const DEF = { x: 1470, y: 470, scale: 1 };             // its centre on the cluster: the right gauge's widget area (estimated from Aref's photo; Move adjusts)
+const SW = 420, SH = 260;                               // the picture
+// its centre on the cluster: where BMW's own widget sits (its icon and "No active entertainment source", measured
+// from Aref's Nov 16 photo: centre x ~1420, y ~292, about 365 x 250 cluster px)
+const DEF = { x: 1420, y: 292, scale: 1 };
 const SLOTS = ['off', 'engine', 'temps', 'g', 'clock', 'music'];
 const MIN_MS = 500;
 const WHITE = [255, 255, 255, 255], GRAY = [152, 152, 159, 255], DIM = [99, 99, 102, 255];
@@ -63,7 +65,7 @@ function draw(c, fonts) {
     const fit = (s, size, w, o) => { s = String(s || ''); if (cv.textWidth(s, size, o) <= w) return s; while (s.length > 1 && cv.textWidth(s + '…', size, o) > w) s = s.slice(0, -1); return s + '…'; };
     if (Array.isArray(c)) {
         // one or two columns, numbers on a shared baseline like the speedometer's "0 mph"
-        const cols = c.length, cw = SW / cols, base = 112;
+        const cols = c.length, cw = SW / cols, base = 150;
         c.forEach((q, i) => {
             const x = i * cw + cw / 2, size = cols === 1 ? 92 : 76;
             const vw = cv.textWidth(q.v, size, B);
@@ -71,9 +73,10 @@ function draw(c, fonts) {
             cv.text(q.v, x - vw / 2, base, size, WHITE, B);
             cv.text(fit(q.u, 24, cw - 20, M), x, base + 40, 24, GRAY, Object.assign({ align: 'center' }, M));
         });
-        if (cols === 2) cv.fillRect(SW / 2, 40, 1, 110, DIM);
+        if (cols === 2) cv.fillRect(SW / 2, 78, 1, 110, DIM);
     } else if (c && c.music) {
-        const m = c.music, n = 150, x0 = 10, y0 = (SH - n) / 2;
+        // as BMW's own widget: the picture on top, centred, the title and the artist under it
+        const m = c.music, n = 140, x0 = (SW - n) / 2, y0 = 6;
         if (m.cover && m.cover.px) {
             // the cover, scaled into n x n with rounded corners (nearest from the square it came as)
             const src = m.cover.px, sn = m.cover.n, r = 14;
@@ -87,9 +90,9 @@ function draw(c, fonts) {
             cv.roundRect(x0, y0, n, n, 14, [28, 28, 30, 255]);
             cv.text('♪', x0 + n / 2, y0 + n / 2 + 26, 72, DIM, Object.assign({ align: 'center' }, M));
         }
-        const tx = x0 + n + 22, tw = SW - tx - 6;
-        cv.text(fit(m.title, 32, tw, B), tx, 82, 32, WHITE, B);
-        cv.text(fit(m.artist, 24, tw, M), tx, 118, 24, GRAY, M);
+        const C = { align: 'center' };
+        cv.text(fit(m.title, 30, SW - 20, B), SW / 2, y0 + n + 42, 30, WHITE, Object.assign({}, B, C));
+        cv.text(fit(m.artist, 24, SW - 20, M), SW / 2, y0 + n + 76, 24, GRAY, Object.assign({}, M, { align: 'center' }));
     }
     return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length);
 }
