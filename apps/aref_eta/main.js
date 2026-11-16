@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.6.2';
+const VERSION = '1.6.3';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -162,7 +162,12 @@ mgu.run({
                 if (!artwork || !t || !t.title) return null;
                 const e = artwork.get({ title: t.title, artist: t.artist, album: t.album });
                 if (e.state !== 'ready') return null;
-                if (!covers[e.ver]) { Object.keys(covers).forEach((k) => delete covers[k]); covers[e.ver] = { px: ART.squareResample(e.cover, ART.ART_PX, ART.ART_PX, 150, 0).px, n: 150 }; }
+                if (!covers[e.ver]) {
+                    Object.keys(covers).forEach((k) => delete covers[k]);
+                    // the small cover, and a 300 px one for the backdrop (the same object while the song plays)
+                    covers[e.ver] = { px: ART.squareResample(e.cover, ART.ART_PX, ART.ART_PX, 150, 0).px, n: 150,
+                        big: { px: ART.squareResample(e.cover, ART.ART_PX, ART.ART_PX, 300, 0).px, n: 300 } };
+                }
                 return covers[e.ver];
             };
             setInterval(guard('slot', () => {
@@ -175,7 +180,9 @@ mgu.run({
                     artwork = new ART.Artwork((m, h, p, hd) => net.request(m, h, p, hd), log);
                 }
                 const t = kind === 'music' && np ? np.track() : null;
-                strip.slot.update(kind !== 'off' && strip.shown, SLOT.content(kind, car.data(), Date.now(), t, coverFor(t)));
+                const cov = coverFor(t), c = SLOT.content(kind, car.data(), Date.now(), t, cov);
+                if (c && c.music && cov) c.music.bg = cov.big;
+                strip.slot.update(kind !== 'off' && strip.shown, c);
             }), 500);
             ui.onClick('BTN_TARGET', guard('target', () => {
                 strip.moving = strip.moving === 'slot' ? null : 'slot';

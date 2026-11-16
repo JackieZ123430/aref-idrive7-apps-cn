@@ -54,7 +54,13 @@ function content(kind, d, now, track, cover) {
         const t = new Date(now), h = t.getHours(), m = t.getMinutes();
         return [{ v: ((h % 12) || 12) + ':' + (m < 10 ? '0' : '') + m, u: h < 12 ? 'AM' : 'PM' }];
     }
-    if (kind === 'music') return track && track.title ? { music: { title: track.title, artist: track.artist || '', cover: cover } } : null;
+    if (kind === 'music') {
+        if (!track || !track.title) return null;
+        // the progress bar moves in 5 s steps: the slot is a picture, redrawn only when it changes
+        const pos = typeof track.position === 'number' ? Math.floor(track.position / 5000) * 5000 : null;
+        const dur = typeof track.duration === 'number' && track.duration > 0 ? track.duration : null;
+        return { music: { title: track.title, artist: track.artist || '', cover: cover, pos: pos, dur: dur } };
+    }
     return null;
 }
 
@@ -93,8 +99,34 @@ function draw(c, fonts) {
         const C = { align: 'center' };
         cv.text(fit(m.title, 30, SW - 20, B), SW / 2, y0 + n + 42, 30, WHITE, Object.assign({}, B, C));
         cv.text(fit(m.artist, 24, SW - 20, M), SW / 2, y0 + n + 76, 24, GRAY, Object.assign({}, M, { align: 'center' }));
+        if (m.dur && m.pos !== null) {
+            const f = Math.max(0, Math.min(1, m.pos / m.dur)), bx = 20, bw = SW - 40, by = SH - 14;
+            cv.roundRect(bx, by, bw, 5, 2.5, [255, 255, 255, 60]);
+            if (f > 0) cv.roundRect(bx, by, Math.max(5, bw * f), 5, 2.5, [255, 106, 0, 255]);
+            const left = Math.max(0, Math.round((m.dur - m.pos) / 1000));
+            cv.text(Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + (left % 60), SW - 20, by - 8, 20, GRAY, Object.assign({}, M, { align: 'right' }));
+        }
     }
     return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length);
+}
+
+const BW = 300, BH = 300;                              // the backdrop's picture
+// its rect, from the slot's centre: the right gauge's inside, as BMW's own music widget fills it
+const BG = { dx: 40, dy: 20, w: 560, h: 560 };
+
+/** The backdrop: the cover (RGBA square px, side n) dimmed to 55 % and faded out to the left, right, top and bottom. */
+function drawBackdrop(px, n) {
+    const out = Buffer.alloc(BW * BH * 4);
+    for (let y = 0; y < BH; y++) {
+        const fy = Math.min(1, y / (BH * 0.18), (BH - 1 - y) / (BH * 0.28));
+        for (let x = 0; x < BW; x++) {
+            const fx = Math.min(1, x / (BW * 0.45), (BW - 1 - x) / (BW * 0.2));
+            const a = Math.max(0, Math.min(1, fx * fx * (3 - 2 * fx))) * Math.max(0, fy);
+            const si = ((Math.floor(y * n / BH) * n) + Math.floor(x * n / BW)) * 4, di = (y * BW + x) * 4;
+            out[di] = px[si] * 0.55; out[di + 1] = px[si + 1] * 0.55; out[di + 2] = px[si + 2] * 0.55; out[di + 3] = Math.round(a * 235);
+        }
+    }
+    return out;
 }
 
 class Slot {
@@ -103,6 +135,12 @@ class Slot {
         this.cr = cr; this.fonts = fonts; this.note = note;
         this.place = Object.assign({}, DEF, place);
         this.ref = null; this.key = null; this.shown = false; this.at = 0; this.pixels = null;
+        this.bg = null; this.bgCover = null; this.bgShown = false;
+    }
+
+    bgRect() {
+        const s = this.place.scale, w = Math.round(BG.w * s), h = Math.round(BG.h * s);
+        return { x: Math.round(this.place.x + BG.dx * s - w / 2), y: Math.round(this.place.y + BG.dy * s - h / 2), w: w, h: h };
     }
 
     rect() {
@@ -116,6 +154,9 @@ class Slot {
             const r = this.rect();
             this.ref = this.cr.image({ target: 'panel', klass: 'content', z: 22, x: r.x, y: r.y, w: r.w, h: r.h, iw: SW, ih: SH,
                 sampling: 'bilinear', fps: 2, visible: false });
+            const b = this.bgRect();
+            this.bg = this.cr.image({ target: 'panel', klass: 'content', z: 21, x: b.x, y: b.y, w: b.w, h: b.h, iw: BW, ih: BH,
+                sampling: 'bilinear', fps: 1, visible: false });
         } catch (e) { this.note('slot: ' + e.message); }
     }
 
@@ -125,7 +166,7 @@ class Slot {
         try {
             const show = !!(want && c);
             if (show) {
-                const key = JSON.stringify(c, (k, v) => (k === 'cover' ? (v ? 'cover' : null) : v));
+                const key = JSON.stringify(c, (k, v) => (k === 'cover' || k === 'bg' ? (v ? k : null) : v));
                 const now = Date.now();
                 if (key !== this.key && now - this.at >= MIN_MS) {
                     this.key = key; this.at = now;
@@ -134,13 +175,19 @@ class Slot {
                 }
             }
             if (show !== this.shown) { this.shown = show; this.cr.set(this.ref, { visible: show }); this.note('slot: ' + (show ? 'show' : 'hide')); }
+            // the music's backdrop: uploaded once per cover (bg: { px, n } the large cover, from c.music.bg)
+            const bg = show && c && c.music && c.music.bg ? c.music.bg : null;
+            if (this.bg && bg && bg !== this.bgCover) { this.bgCover = bg; this.cr.pixels(this.bg, null, drawBackdrop(bg.px, bg.n)); }
+            const bgShow = !!bg;
+            if (this.bg && bgShow !== this.bgShown) { this.bgShown = bgShow; this.cr.set(this.bg, { visible: bgShow }); }
         } catch (e) { this.note('slot: ' + e.message); }
     }
 
     move(place) {
         this.place = Object.assign({}, DEF, place);
         if (this.ref) { try { const r = this.rect(); this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h }); } catch (e) { /* next */ } }
+        if (this.bg) { try { const b = this.bgRect(); this.cr.set(this.bg, { x: b.x, y: b.y, w: b.w, h: b.h }); } catch (e) { /* next */ } }
     }
 }
 
-module.exports = { Slot, SLOTS, DEF, SW, SH, content, draw, gearText };
+module.exports = { Slot, SLOTS, DEF, SW, SH, BW, BH, content, draw, drawBackdrop, gearText };
