@@ -67,6 +67,10 @@ class Strip {
             const src = pack.open(dir);
             if (fonts.register('eta_bold', src.json('cl_bold.json'))) this.fonts.bold = 'eta_bold';
             if (fonts.register('eta_med', src.json('cl_med.json'))) this.fonts.med = 'eta_med';
+            // Settings > Font: Apple (Inter) or BMW (Barlow Semi Condensed, OFL: close to the cluster's own type)
+            this.families = { apple: { bold: this.fonts.bold, med: this.fonts.med }, bmw: { bold: this.fonts.bold, med: this.fonts.med } };
+            if (fonts.register('eta_bw_bold', src.json('bw_bold.json'))) this.families.bmw.bold = 'eta_bw_bold';
+            if (fonts.register('eta_bw_med', src.json('bw_med.json'))) this.families.bmw.med = 'eta_bw_med';
         } catch (e) { this.note('fonts: ' + e.message); }
     }
 
@@ -123,6 +127,15 @@ class Strip {
         }
     }
 
+    hideFor(ms) { this.hideUntil = Date.now() + ms; }
+    /** Apple or BMW type, for the ETA and the second slot (the same fonts object, changed in place). */
+    setFont(name) {
+        const f = this.families && this.families[name];
+        if (!f || this.fonts.bold === f.bold) return;
+        this.fonts.bold = f.bold; this.fonts.med = f.med;
+        this.text = null; if (this.slot) this.slot.key = null;
+    }
+
     /** The look (look.js style: Settings). Redrawn at the next update; a change shows the preview. */
     setStyle(style) {
         const k = JSON.stringify(style);
@@ -141,7 +154,11 @@ class Strip {
         if (this.streetText) { this.streetText = null; this.text = null; }
         const preview = Date.now() < this.previewUntil;
         const p = route ? LOOK.parts(route, arrival, this.style) : preview ? LOOK.parts(LOOK.SAMPLE_ROUTE, '6:42 PM', this.style) : null;
-        const want = !!(this.cfg.on && p && (route || preview)) && this.onSchedule(!!(route || preview), arrival);
+        // not over BMW's own strip: while the cluster map is off (BMW shows the odometer there at start) and for a few
+        // seconds after a BMW Check Control message (hideFor)
+        const mapOff = !preview && this.map.state && this.map.state !== 'shown';
+        const want = !!(this.cfg.on && p && (route || preview)) && !mapOff && Date.now() >= (this.hideUntil || 0) &&
+            this.onSchedule(!!(route || preview), arrival);
         const key = p ? JSON.stringify(p) + this.styleKey : null;
         try {
             if (key && key !== this.text) {

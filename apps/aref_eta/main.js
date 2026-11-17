@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.6.4';
+const VERSION = '1.7.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -132,6 +132,19 @@ mgu.run({
                     arrival: !!g('show_arrival', D.arrival), minutes: !!g('show_minutes', D.minutes), distance: !!g('show_distance', D.distance) };
             };
             strip.setStyle(style());
+            const font = () => strip.setFont(ctx.settings.get('font') === 'bmw' ? 'bmw' : 'apple');
+            font();
+            ctx.settings.onChange(guard('font', font));
+            // a BMW Check Control message: the ETA steps aside for 8 s (the second slot stays)
+            let ccSeen = false;
+            ctx.signals.watch('de.bmw.infotainment.KombiInterface_2', '1', {
+                newCCMessage: guard('cc', (v) => {
+                    if (!ccSeen) { ccSeen = true; return; }          // the value held at start is no new message
+                    strip.hideFor(8000);
+                    write('BMW message: ETA hidden 8 s ' + json(v).slice(0, 300));
+                }),
+            }, log).then((sub) => write('subscribed cc: ' + (sub.available ? 'available' : 'not available') + (sub.error ? ' (' + sub.error + ')' : '')),
+                (e) => write('subscribe cc failed: ' + e.message));
             ctx.settings.onChange(guard('style', () => strip.setStyle(style())));
             // the street you're on, for the island preset's bottom strip: BMW's own map-matched street
             // (NavigationStatus.currentLocation, which keeps it during a CarPlay route; only the street is kept here,
@@ -182,7 +195,7 @@ mgu.run({
                 const t = kind === 'music' && np ? np.track() : null;
                 const cov = coverFor(t), c = SLOT.content(kind, car.data(), Date.now(), t, cov);
                 if (c && c.music && cov) c.music.bg = cov.big;
-                strip.slot.update(kind !== 'off' && strip.shown, c);
+                strip.slot.update(kind !== 'off' && strip.cfg.on, c);   // by itself, as BMW's own widget: not tied to the ETA or the map
             }), 500);
             ui.onClick('BTN_TARGET', guard('target', () => {
                 strip.moving = strip.moving === 'slot' ? null : 'slot';

@@ -111,22 +111,29 @@ function draw(c, fonts) {
 }
 
 const BW = 300, BH = 300;                              // the backdrop's picture
-// its rect, from the slot's centre: the right gauge's inside, as BMW's own music widget fills it
-const BG = { dx: 15, dy: 15, w: 520, h: 500 };
+// its rect, from the slot's centre: the inside of the right gauge (cluster x 1280-1800, y 90-610 at the default place)
+const BG = { dx: 75, dy: 10, w: 520, h: 520 };
+// the gauge's inside as BMW's own widget fills it (its orange outline, from Aref's photos), in the rect's 0..1
+const FRAME = [[0.06, 0.1], [0.62, 0.11], [0.95, 0.48], [0.76, 0.99], [0.3, 0.99], [0.14, 0.5]];
+const FEATHER = 0.05;
 
-/** The backdrop: the cover (RGBA square px, side n) dimmed to 55 % and faded out to the left, right, top and bottom. */
+/** The backdrop: the cover (RGBA square px, side n) dimmed, inside the gauge's frame with a soft edge. */
 function drawBackdrop(px, n) {
     const out = Buffer.alloc(BW * BH * 4);
+    const cx = FRAME.reduce((t, p) => t + p[0], 0) / FRAME.length, cy = FRAME.reduce((t, p) => t + p[1], 0) / FRAME.length;
+    const edges = FRAME.map((p, i) => {
+        const q = FRAME[(i + 1) % FRAME.length], ex = q[0] - p[0], ey = q[1] - p[1], len = Math.hypot(ex, ey);
+        const sign = (ex * (cy - p[1]) - ey * (cx - p[0])) >= 0 ? 1 : -1;
+        return { x: p[0], y: p[1], ex: ex / len * sign, ey: ey / len * sign };
+    });
     for (let y = 0; y < BH; y++) {
-        const fy = Math.min(1, y / (BH * 0.2), (BH - 1 - y) / (BH * 0.25));
         for (let x = 0; x < BW; x++) {
-            // a short, smooth fade into the map on the left; the top right corner kept clear of the tach's red line
-            const fx = Math.min(1, x / (BW * 0.22), (BW - 1 - x) / (BW * 0.18));
-            const corner = Math.min(1, Math.hypot(BW - x, y) / (BW * 0.62));
-            const s1 = (v) => { v = Math.max(0, Math.min(1, v)); return v * v * (3 - 2 * v); };
-            const a = s1(fx) * s1(fy) * s1(corner);
+            const u = (x + 0.5) / BW, v = (y + 0.5) / BH;
+            let d = 1;
+            for (let i = 0; i < edges.length; i++) { const e = edges[i]; d = Math.min(d, e.ex * (v - e.y) - e.ey * (u - e.x)); }
+            let a = Math.max(0, Math.min(1, d / FEATHER)); a = a * a * (3 - 2 * a);
             const si = ((Math.floor(y * n / BH) * n) + Math.floor(x * n / BW)) * 4, di = (y * BW + x) * 4;
-            out[di] = px[si] * 0.55; out[di + 1] = px[si + 1] * 0.55; out[di + 2] = px[si + 2] * 0.55; out[di + 3] = Math.round(a * 235);
+            out[di] = px[si] * 0.6; out[di + 1] = px[si + 1] * 0.6; out[di + 2] = px[si + 2] * 0.6; out[di + 3] = Math.round(a * 240);
         }
     }
     return out;
