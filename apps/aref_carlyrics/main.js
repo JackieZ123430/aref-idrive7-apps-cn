@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.3.3';
+const VERSION = '0.3.4';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -46,7 +46,7 @@ const IFACES = [
     { iface: 'de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer', instances: [] },
 ];
 const ART_ID = 41, BG_ID = 42, BG2_ID = 43;    // pixel picture ids (record.setImage)
-const FRAME_MS = 1000 / 30;       // the animation clock's step: at most 30 different frames a second
+const FRAME_MS = 1000 / 60;       // the animation clock's step: up to 60 different frames a second while lines glide (identical frames still aren't sent)
 const LEAD_MS = 250;              // a line lights up this much before its time (reading takes a moment)
 const GLIDE_MS = 620;             // the lyrics glide to the next line over this long
 const STAGGER_MS = 45;            // ... each line below a little after the one above (Apple Music's ripple)
