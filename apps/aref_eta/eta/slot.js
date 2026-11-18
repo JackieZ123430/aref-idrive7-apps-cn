@@ -166,18 +166,37 @@ function dist0(s, u, v) {
     return inside ? d : -d;
 }
 
-/** The backdrop: the cover dimmed, in the chosen shape with a soft edge (shape 'bmw' when unknown). */
-function drawBackdrop(px, n, shape) {
-    const out = Buffer.alloc(BW * BH * 4);
+/**
+ * The backdrop: the cover dimmed, in the chosen shape with a soft edge (shape 'bmw' when unknown).
+ * look: { soft: edge feather in box units, opacity 0..1, fade: 'none'|'bottom'|'top'|'left'|'right' (that side
+ * fades out over its last FADE_LEN of the shape, to let a gauge show through without moving the backdrop) }.
+ */
+const FADE_LEN = 0.35;
+const DEF_LOOK = { soft: FEATHER, opacity: 1, fade: 'none' };
+function drawBackdrop(px, n, shape, look) {
+    const L = Object.assign({}, DEF_LOOK, look);
+    const out = Buffer.alloc(BW * BH * 4), D = new Float32Array(BW * BH);
     const s = SHAPES[shape] || SHAPES.bmw;
+    let x0 = 1, x1 = 0, y0 = 1, y1 = 0;          // the shape's extent, for the side fade
     for (let y = 0; y < BH; y++) {
         for (let x = 0; x < BW; x++) {
-            const u = (x + 0.5) / BW, v = (y + 0.5) / BH;
-            const d = dist(s, u, v);
+            const u = (x + 0.5) / BW, v = (y + 0.5) / BH, d = dist(s, u, v);
+            D[y * BW + x] = d;
+            if (d > 0) { if (u < x0) x0 = u; if (u > x1) x1 = u; if (v < y0) y0 = v; if (v > y1) y1 = v; }
+        }
+    }
+    const len = FADE_LEN * Math.max(x1 - x0, y1 - y0, 0.01);
+    for (let y = 0; y < BH; y++) {
+        for (let x = 0; x < BW; x++) {
+            const d = D[y * BW + x];
             if (d <= 0) continue;
-            let a = Math.min(1, d / FEATHER); a = a * a * (3 - 2 * a);
+            const u = (x + 0.5) / BW, v = (y + 0.5) / BH;
+            let a = Math.min(1, d / L.soft); a = a * a * (3 - 2 * a);
+            const k = L.fade === 'bottom' ? (y1 - v) / len : L.fade === 'top' ? (v - y0) / len
+                : L.fade === 'left' ? (u - x0) / len : L.fade === 'right' ? (x1 - u) / len : 1;
+            if (k < 1) { const f = Math.max(0, k); a *= f * f * (3 - 2 * f); }
             const si = ((Math.floor(y * n / BH) * n) + Math.floor(x * n / BW)) * 4, di = (y * BW + x) * 4;
-            out[di] = px[si] * 0.6; out[di + 1] = px[si + 1] * 0.6; out[di + 2] = px[si + 2] * 0.6; out[di + 3] = Math.round(a * 240);
+            out[di] = px[si] * 0.6; out[di + 1] = px[si + 1] * 0.6; out[di + 2] = px[si + 2] * 0.6; out[di + 3] = Math.round(a * 240 * L.opacity);
         }
     }
     return out;
@@ -190,7 +209,13 @@ class Slot {
         this.place = Object.assign({}, DEF, place);
         this.fit = Object.assign({ x: 0, y: 0, scale: 1 }, fit);    // the backdrop's own nudge (Moving: backdrop)
         this.ref = null; this.key = null; this.shown = false; this.at = 0; this.pixels = null;
-        this.bg = null; this.bgCover = null; this.bgShown = false; this.shape = 'bmw';
+        this.bg = null; this.bgCover = null; this.bgShown = false; this.shape = 'bmw'; this.look = Object.assign({}, DEF_LOOK);
+    }
+
+    /** Settings > backdrop softness, opacity and fade: redrawn at the next update. */
+    setLook(look) {
+        const l = Object.assign({}, DEF_LOOK, look);
+        if (JSON.stringify(l) !== JSON.stringify(this.look)) { this.look = l; this.bgCover = null; }
     }
 
     /** Settings > Music backdrop: redrawn at the next update. */
@@ -240,7 +265,7 @@ class Slot {
             if (show !== this.shown) { this.shown = show; this.cr.set(this.ref, { visible: show }); this.note('slot: ' + (show ? 'show' : 'hide')); }
             // the music's backdrop: uploaded once per cover (bg: { px, n } the large cover, from c.music.bg)
             const bg = show && c && c.music && c.music.bg && this.shape !== 'off' ? c.music.bg : null;
-            if (this.bg && bg && bg !== this.bgCover) { this.bgCover = bg; this.cr.pixels(this.bg, null, drawBackdrop(bg.px, bg.n, this.shape)); }
+            if (this.bg && bg && bg !== this.bgCover) { this.bgCover = bg; this.cr.pixels(this.bg, null, drawBackdrop(bg.px, bg.n, this.shape, this.look)); }
             const bgShow = !!bg;
             if (this.bg && bgShow !== this.bgShown) { this.bgShown = bgShow; this.cr.set(this.bg, { visible: bgShow }); }
         } catch (e) { this.note('slot: ' + e.message); }
