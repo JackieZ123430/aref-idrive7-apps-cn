@@ -185,9 +185,10 @@ function drawBackdrop(px, n, shape) {
 
 class Slot {
     /** cr: the cluster renderer client (or null); fonts: { bold, med } atlas names; note(line): the app's log. */
-    constructor(cr, fonts, note, place) {
+    constructor(cr, fonts, note, place, fit) {
         this.cr = cr; this.fonts = fonts; this.note = note;
         this.place = Object.assign({}, DEF, place);
+        this.fit = Object.assign({ x: 0, y: 0, scale: 1 }, fit);    // the backdrop's own nudge (Moving: backdrop)
         this.ref = null; this.key = null; this.shown = false; this.at = 0; this.pixels = null;
         this.bg = null; this.bgCover = null; this.bgShown = false; this.shape = 'bmw';
     }
@@ -199,8 +200,10 @@ class Slot {
     }
 
     bgRect() {
-        const s = this.place.scale, w = Math.round(BG.w * s), h = Math.round(BG.h * s);
-        return { x: Math.round(this.place.x + BG.dx * s - w / 2), y: Math.round(this.place.y + BG.dy * s - h / 2), w: w, h: h };
+        const s = this.place.scale, f = this.fit, w = Math.round(BG.w * s * f.scale), h = Math.round(BG.h * s * f.scale);
+        // sized from its top-left corner, so Smaller pulls the bottom up off the tach
+        const x0 = this.place.x + BG.dx * s - BG.w * s / 2 + f.x, y0 = this.place.y + BG.dy * s - BG.h * s / 2 + f.y;
+        return { x: Math.round(x0), y: Math.round(y0), w: w, h: h };
     }
 
     rect() {
@@ -243,8 +246,9 @@ class Slot {
         } catch (e) { this.note('slot: ' + e.message); }
     }
 
-    move(place) {
+    move(place, fit) {
         this.place = Object.assign({}, DEF, place);
+        if (fit) this.fit = Object.assign({ x: 0, y: 0, scale: 1 }, fit);
         if (this.ref) { try { const r = this.rect(); this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h }); } catch (e) { /* next */ } }
         if (this.bg) { try { const b = this.bgRect(); this.cr.set(this.bg, { x: b.x, y: b.y, w: b.w, h: b.h }); } catch (e) { /* next */ } }
     }

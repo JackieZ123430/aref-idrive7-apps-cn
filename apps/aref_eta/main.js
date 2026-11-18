@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.8.1';
+const VERSION = '1.9.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -203,9 +203,11 @@ mgu.run({
                 strip.slot.update(kind !== 'off' && strip.cfg.on, c);   // by itself, as BMW's own widget: not tied to the ETA or the map
             }), 500);
             ui.onClick('BTN_TARGET', guard('target', () => {
-                strip.moving = strip.moving === 'slot' ? null : 'slot';
-                try { ui.text('BTN_TARGET', strip.moving === 'slot' ? 'Moving: 2nd slot' : 'Moving: ETA'); } catch (e) { /* */ }
-                say(strip.moving === 'slot' ? 'Up, Down, Left, Right and Bigger / Smaller now move the second slot.' : 'The buttons move the ETA again.');
+                strip.moving = !strip.moving ? 'slot' : strip.moving === 'slot' ? 'backdrop' : null;
+                const L = { slot: 'Moving: 2nd slot', backdrop: 'Moving: music backdrop' };
+                try { ui.text('BTN_TARGET', L[strip.moving] || 'Moving: ETA'); } catch (e) { /* */ }
+                say(strip.moving === 'slot' ? 'The buttons now move the second slot.' : strip.moving === 'backdrop'
+                    ? 'The buttons now move only the music backdrop. Smaller pulls its bottom up off the tach.' : 'The buttons move the ETA again.');
             }));
 
             onRoute = guard('strip', () => { const r = stripRoute();

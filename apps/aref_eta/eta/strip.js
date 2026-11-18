@@ -118,7 +118,7 @@ class Strip {
                 sampling: 'bilinear', fps: 2, visible: false });
             this.island = new ISL.Island(cr, this.note);
             this.island.create(this.cfg.islandMap, IW, IH, 'map', this.style.look);
-            this.slot = new SLOT.Slot(cr, this.fonts, this.note, this.cfg.slot3);
+            this.slot = new SLOT.Slot(cr, this.fonts, this.note, this.cfg.slot3, this.cfg.bgFit);
             this.slot.create();
             cr.connect();
         } catch (e) {
@@ -268,19 +268,32 @@ class Strip {
             const r = this.rect();
             if (this.cr && this.ref) this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h });
             if (this.island) this.island.move(this.cfg.islandMap);
-            if (this.slot) this.slot.move(this.cfg.slot3);
+            if (this.slot) this.slot.move(this.cfg.slot3, this.cfg.bgFit);
         } catch (e) { /* next */ }
         this.save();
     }
     move(dx, dy) {
+        if (this.moving === 'backdrop') {             // the music backdrop on its own: offset and size, saved
+            const f = this.cfg.bgFit = Object.assign({ x: 0, y: 0, scale: 1 }, this.cfg.bgFit);
+            f.x = Math.max(-300, Math.min(300, f.x + dx * 10)); f.y = Math.max(-300, Math.min(300, f.y + dy * 10));
+            this.note('placed backdrop at ' + f.x + ', ' + f.y + ', ' + Math.round(f.scale * 100) + '%');
+            this.place(); return;
+        }
         const isl = this.style.preset === 'island' && this.moving !== 'slot', o = this.spot(), st = isl ? STEP_ISLAND : this.moving === 'slot' ? STEP_ISLAND : STEP, lim = isl ? LIMIT_ISLAND : LIMIT;
         o.x = clamp(o.x + dx * st.x, lim.x); o.y = clamp(o.y + dy * st.y, lim.y);
         this.note('placed ' + (this.moving === 'slot' ? 'second slot' : this.style.preset === 'island' ? 'island' : 'strip') + ' at x ' + o.x + ', y ' + o.y + ', ' + Math.round(o.scale * 100) + '%');
         this.place(); this.preview();
     }
-    size(d) { const o = this.spot(); o.scale = clamp(Math.round((o.scale + d * STEP.scale) * 10) / 10, LIMIT.scale); this.place(); this.preview(); }
+    size(d) {
+        if (this.moving === 'backdrop') {
+            const f = this.cfg.bgFit = Object.assign({ x: 0, y: 0, scale: 1 }, this.cfg.bgFit);
+            f.scale = Math.max(0.5, Math.min(1.5, Math.round((f.scale + d * 0.05) * 100) / 100));
+            this.note('backdrop size ' + Math.round(f.scale * 100) + '%'); this.place(); return;
+        }
+        const o = this.spot(); o.scale = clamp(Math.round((o.scale + d * STEP.scale) * 10) / 10, LIMIT.scale); this.place(); this.preview(); }
     reset() {
-        if (this.moving === 'slot') this.cfg.slot3 = Object.assign({}, SLOT.DEF);
+        if (this.moving === 'backdrop') this.cfg.bgFit = { x: 0, y: 0, scale: 1 };
+        else if (this.moving === 'slot') this.cfg.slot3 = Object.assign({}, SLOT.DEF);
         else if (this.style.preset === 'island') this.cfg.islandMap = Object.assign({}, DEF_ISLAND);
         else this.cfg = Object.assign({}, DEF, { on: this.cfg.on, islandMap: this.cfg.islandMap });
         this.place(); this.preview();
