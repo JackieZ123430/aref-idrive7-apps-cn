@@ -112,26 +112,64 @@ function draw(c, fonts) {
 
 const BW = 300, BH = 300;                              // the backdrop's picture
 // its rect, from the slot's centre: the inside of the right gauge (cluster x 1280-1800, y 90-610 at the default place)
-const BG = { dx: 75, dy: 10, w: 520, h: 520 };
-// the gauge's inside as BMW's own widget fills it (its orange outline, from Aref's photos), in the rect's 0..1
-const FRAME = [[0.06, 0.1], [0.62, 0.11], [0.95, 0.48], [0.76, 0.99], [0.3, 0.99], [0.14, 0.5]];
+// the backdrop's box on the cluster, from its centre: BMW's music art region in the Flume photo (panel px TL 1269,95
+// TR 1705,95 R 1794,357 BR 1646,613 BL 1451,613 ML 1522,357; the slot's centre 1465,340)
+const BG = { dx: 66, dy: 14, w: 525, h: 520 };
+// Settings > Music backdrop: shapes in the box (0..1 each way), drawn with soft edges
+const poly = (pts) => ({ poly: pts });
+const arc = (cx, cy, rx, ry, a0, a1, n) => {
+    const out = [];
+    for (let i = 0; i <= n; i++) { const t = a0 + (a1 - a0) * i / n; out.push([cx + rx * Math.cos(t), cy + ry * Math.sin(t)]); }
+    return out;
+};
+const heart = () => {
+    const pts = [];
+    for (let i = 0; i < 64; i++) {
+        const t = i / 64 * 2 * Math.PI, x = 16 * Math.pow(Math.sin(t), 3);
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        pts.push([0.5 + x / 36, 0.47 - y / 36]);
+    }
+    return pts;
+};
+const SHAPES = {
+    // BMW's: flat top, the right side follows the gauge, the left side an inverted half diamond (in to ML, back out)
+    bmw: poly([[0, 0], [0.83, 0], [1, 0.505], [0.72, 1], [0.35, 1], [0.483, 0.505]]),
+    full: { circle: 0.5 },                                       // the whole gauge face
+    circle: { circle: 0.4 },
+    half: poly(arc(0.42, 0.5, 0.5, 0.48, -Math.PI / 2, Math.PI / 2, 40)),   // a D: flat left, round right like the gauge
+    diamond: poly([[0.5, 0.04], [0.96, 0.5], [0.5, 0.96], [0.04, 0.5]]),
+    heart: poly(heart()),
+    square: poly([[0.12, 0.12], [0.88, 0.12], [0.88, 0.88], [0.12, 0.88]]),
+};
+const SHAPE_NAMES = ['bmw', 'full', 'circle', 'half', 'diamond', 'heart', 'square', 'off'];
 const FEATHER = 0.05;
 
-/** The backdrop: the cover (RGBA square px, side n) dimmed, inside the gauge's frame with a soft edge. */
-function drawBackdrop(px, n) {
+/** Signed distance from (u, v) to shape s, in box units: > 0 inside. Works for any simple polygon (bmw isn't convex). */
+function dist(s, u, v) {
+    if (s.circle) return s.circle - Math.hypot(u - 0.5, v - 0.5);
+    const P = s.poly;
+    let d = 1e9, inside = false;
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+        const ax = P[j][0], ay = P[j][1], bx = P[i][0], by = P[i][1];
+        if ((by > v) !== (ay > v) && u < (ax - bx) * (v - by) / (ay - by) + bx) inside = !inside;
+        const ex = bx - ax, ey = by - ay, t = Math.max(0, Math.min(1, ((u - ax) * ex + (v - ay) * ey) / (ex * ex + ey * ey)));
+        const dx = u - ax - ex * t, dy = v - ay - ey * t;
+        d = Math.min(d, dx * dx + dy * dy);
+    }
+    d = Math.sqrt(d);
+    return inside ? d : -d;
+}
+
+/** The backdrop: the cover dimmed, in the chosen shape with a soft edge (shape 'bmw' when unknown). */
+function drawBackdrop(px, n, shape) {
     const out = Buffer.alloc(BW * BH * 4);
-    const cx = FRAME.reduce((t, p) => t + p[0], 0) / FRAME.length, cy = FRAME.reduce((t, p) => t + p[1], 0) / FRAME.length;
-    const edges = FRAME.map((p, i) => {
-        const q = FRAME[(i + 1) % FRAME.length], ex = q[0] - p[0], ey = q[1] - p[1], len = Math.hypot(ex, ey);
-        const sign = (ex * (cy - p[1]) - ey * (cx - p[0])) >= 0 ? 1 : -1;
-        return { x: p[0], y: p[1], ex: ex / len * sign, ey: ey / len * sign };
-    });
+    const s = SHAPES[shape] || SHAPES.bmw;
     for (let y = 0; y < BH; y++) {
         for (let x = 0; x < BW; x++) {
             const u = (x + 0.5) / BW, v = (y + 0.5) / BH;
-            let d = 1;
-            for (let i = 0; i < edges.length; i++) { const e = edges[i]; d = Math.min(d, e.ex * (v - e.y) - e.ey * (u - e.x)); }
-            let a = Math.max(0, Math.min(1, d / FEATHER)); a = a * a * (3 - 2 * a);
+            const d = dist(s, u, v);
+            if (d <= 0) continue;
+            let a = Math.min(1, d / FEATHER); a = a * a * (3 - 2 * a);
             const si = ((Math.floor(y * n / BH) * n) + Math.floor(x * n / BW)) * 4, di = (y * BW + x) * 4;
             out[di] = px[si] * 0.6; out[di + 1] = px[si + 1] * 0.6; out[di + 2] = px[si + 2] * 0.6; out[di + 3] = Math.round(a * 240);
         }
@@ -145,7 +183,13 @@ class Slot {
         this.cr = cr; this.fonts = fonts; this.note = note;
         this.place = Object.assign({}, DEF, place);
         this.ref = null; this.key = null; this.shown = false; this.at = 0; this.pixels = null;
-        this.bg = null; this.bgCover = null; this.bgShown = false;
+        this.bg = null; this.bgCover = null; this.bgShown = false; this.shape = 'bmw';
+    }
+
+    /** Settings > Music backdrop: redrawn at the next update. */
+    setShape(name) {
+        if (SHAPE_NAMES.indexOf(name) < 0) name = 'bmw';
+        if (name !== this.shape) { this.shape = name; this.bgCover = null; }
     }
 
     bgRect() {
@@ -186,8 +230,8 @@ class Slot {
             }
             if (show !== this.shown) { this.shown = show; this.cr.set(this.ref, { visible: show }); this.note('slot: ' + (show ? 'show' : 'hide')); }
             // the music's backdrop: uploaded once per cover (bg: { px, n } the large cover, from c.music.bg)
-            const bg = show && c && c.music && c.music.bg ? c.music.bg : null;
-            if (this.bg && bg && bg !== this.bgCover) { this.bgCover = bg; this.cr.pixels(this.bg, null, drawBackdrop(bg.px, bg.n)); }
+            const bg = show && c && c.music && c.music.bg && this.shape !== 'off' ? c.music.bg : null;
+            if (this.bg && bg && bg !== this.bgCover) { this.bgCover = bg; this.cr.pixels(this.bg, null, drawBackdrop(bg.px, bg.n, this.shape)); }
             const bgShow = !!bg;
             if (this.bg && bgShow !== this.bgShown) { this.bgShown = bgShow; this.cr.set(this.bg, { visible: bgShow }); }
         } catch (e) { this.note('slot: ' + e.message); }
@@ -200,4 +244,4 @@ class Slot {
     }
 }
 
-module.exports = { Slot, SLOTS, DEF, SW, SH, BW, BH, content, draw, drawBackdrop, gearText };
+module.exports = { Slot, SLOTS, SHAPE_NAMES, DEF, SW, SH, BW, BH, content, draw, drawBackdrop, gearText };

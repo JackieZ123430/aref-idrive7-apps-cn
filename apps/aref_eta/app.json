@@ -2,7 +2,7 @@
   "id": "aref_eta",
   "title": "ETA Bar",
   "description": "Apple Maps' arrival time, time left and distance on the instrument cluster while Apple Maps guides on CarPlay. Two presets: the bottom strip's blank space (black, smoked, outline or plain), or an island at the top that pops out of the driver attention camera like iPhone's Dynamic Island, once or every 10 s to 5 min. Updates with every route change. Starts with the car. Needs the Cluster renderer tool from the Store.",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "vendor": "aref",
   "loggingId": "OAR7",
   "mguAppStartType": "autostart",
@@ -312,6 +312,46 @@
       ]
     },
     {
+      "key": "music_shape",
+      "label": "Music backdrop shape",
+      "type": "choice",
+      "default": "bmw",
+      "options": [
+        [
+          "bmw",
+          "BMW (like the stock widget)"
+        ],
+        [
+          "full",
+          "Full gauge"
+        ],
+        [
+          "circle",
+          "Circle"
+        ],
+        [
+          "half",
+          "Half (D shape)"
+        ],
+        [
+          "diamond",
+          "Diamond"
+        ],
+        [
+          "heart",
+          "Heart"
+        ],
+        [
+          "square",
+          "Square"
+        ],
+        [
+          "off",
+          "No backdrop"
+        ]
+      ]
+    },
+    {
       "key": "show_arrival",
       "label": "Show arrival time",
       "type": "bool",
@@ -338,6 +378,12 @@
     {
       "key": "ampm",
       "label": "Show AM / PM",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "probe_log",
+      "label": "Save every guidance value to eta-probe.log (diagnostics)",
       "type": "bool",
       "default": false
     }

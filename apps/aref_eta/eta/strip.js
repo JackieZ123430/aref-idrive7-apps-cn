@@ -68,9 +68,9 @@ class Strip {
             if (fonts.register('eta_bold', src.json('cl_bold.json'))) this.fonts.bold = 'eta_bold';
             if (fonts.register('eta_med', src.json('cl_med.json'))) this.fonts.med = 'eta_med';
             // Settings > Font: Apple (Inter) or BMW (Barlow Semi Condensed, OFL: close to the cluster's own type)
-            this.families = { apple: { bold: this.fonts.bold, med: this.fonts.med }, bmw: { bold: this.fonts.bold, med: this.fonts.med } };
-            if (fonts.register('eta_bw_bold', src.json('bw_bold.json'))) this.families.bmw.bold = 'eta_bw_bold';
-            if (fonts.register('eta_bw_med', src.json('bw_med.json'))) this.families.bmw.med = 'eta_bw_med';
+            // Barlow is loaded only when picked (two atlases less in memory for most drives)
+            this.families = { apple: { bold: this.fonts.bold, med: this.fonts.med }, bmw: null };
+            this.fontSrc = src;
         } catch (e) { this.note('fonts: ' + e.message); }
     }
 
@@ -127,9 +127,20 @@ class Strip {
         }
     }
 
+    /** Nothing on the cluster and nothing coming: the 1 s route check can skip. */
+    idle() { return !this.shown && !this.pending && !(this.isl && this.isl.active) && Date.now() >= (this.previewUntil || 0); }
+
     hideFor(ms) { this.hideUntil = Date.now() + ms; }
     /** Apple or BMW type, for the ETA and the second slot (the same fonts object, changed in place). */
     setFont(name) {
+        if (name === 'bmw' && this.families && !this.families.bmw && this.fontSrc) {
+            const b = { bold: this.families.apple.bold, med: this.families.apple.med };
+            try {
+                if (fonts.register('eta_bw_bold', this.fontSrc.json('bw_bold.json'))) b.bold = 'eta_bw_bold';
+                if (fonts.register('eta_bw_med', this.fontSrc.json('bw_med.json'))) b.med = 'eta_bw_med';
+            } catch (e) { this.note('fonts: ' + e.message); }
+            this.families.bmw = b;
+        }
         const f = this.families && this.families[name];
         if (!f || this.fonts.bold === f.bold) return;
         this.fonts.bold = f.bold; this.fonts.med = f.med;

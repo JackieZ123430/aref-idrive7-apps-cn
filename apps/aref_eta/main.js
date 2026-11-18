@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -62,7 +62,10 @@ mgu.run({
             const vals = {};              // 'tag.field' -> { v, at, n }
             const subs = [], proxies = {};
             const json = (v) => { try { return JSON.stringify(v); } catch (e) { return String(v); } };
-            const write = (line) => {
+            // every guidance value to eta-probe.log only when Settings > probe log is on (off: no disk writes while driving);
+            // tests, marks and starts always go to eta-tests.log (note2)
+            const write = (line, always) => {
+                if (!always && !ctx.settings.get('probe_log')) return;
                 try {
                     try { if (fs.statSync(FILE).size > LOG_MAX) fs.renameSync(FILE, FILE + '.1'); } catch (e) { /* none yet */ }
                     fs.appendFileSync(FILE, new Date().toISOString() + ' ' + line + '\n');
@@ -70,7 +73,7 @@ mgu.run({
             };
             const TESTS = path.join(ctx.dataDir, 'eta-tests.log');
             const note2 = (line) => {     // tests, marks and starts: also in their own file and the app log
-                write(line);
+                write(line, true);
                 try { log.info(line); } catch (e) { /* no log */ }
                 try {
                     try { if (fs.statSync(TESTS).size > TESTS_MAX) fs.renameSync(TESTS, TESTS + '.1'); } catch (e) { /* none yet */ }
@@ -186,6 +189,8 @@ mgu.run({
             setInterval(guard('slot', () => {
                 if (!strip.slot) return;
                 const kind = slotKind();
+                if (kind === 'off' && !strip.slot.shown) return;        // idle: nothing to draw or hide
+                strip.slot.setShape(ctx.settings.get('music_shape') || 'bmw');
                 if (kind === 'music' && !np) {          // started on first use: it subscribes to a lot
                     np = new NP.NowPlaying(ctx.signals, log, NP_IFACES);
                     np.start().catch((e) => log.warn('nowplaying: ' + e.message));
@@ -203,7 +208,10 @@ mgu.run({
                 say(strip.moving === 'slot' ? 'Up, Down, Left, Right and Bigger / Smaller now move the second slot.' : 'The buttons move the ETA again.');
             }));
 
-            onRoute = guard('strip', () => { const r = stripRoute(); strip.update(r, r ? R.arrivalText(r, Date.now()) : null, road()); });
+            onRoute = guard('strip', () => { const r = stripRoute();
+                if (!r && strip.idle && strip.idle()) return;          // idle: no route, nothing shown, no preview
+                strip.update(r, r ? R.arrivalText(r, Date.now()) : null, road());
+            });
             setInterval(onRoute, 1000);
             const placed = () => say('Moved. Showing a preview on the cluster for 30 seconds.');
             // the button says what it will do, so an accidental press is easy to see and undo

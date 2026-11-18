@@ -39,6 +39,9 @@ module.exports = async function start(ctx) {
 
             let busy = false, status = 'Waiting for the first scan', nextAt = Date.now() + FIRST_SCAN_MS, view = 'timeline', page = 0;
             const everyMs = () => (Number(settings.get('every')) || 10) * 60000;
+            /** Engine off (rpm known and low): scan a third as often; the fault memory barely changes parked. */
+            const engineOff = () => { const r = (car.data() || {}).rpm; return isFinite(r) && r <= 300; };
+            const nextGap = () => everyMs() * (engineOff() ? 3 : 1);
             const units = () => settings.get('units') || 'us';
             const name = (ecuHex) => ECU[parseInt(ecuHex, 16)] || 'ECU 0x' + ecuHex;
 
@@ -74,7 +77,7 @@ module.exports = async function start(ctx) {
                     log.warn('scan: ' + e);
                 } finally {
                     busy = false;
-                    nextAt = Date.now() + everyMs();
+                    nextAt = Date.now() + nextGap();
                 }
             }
             setInterval(guard('timer', () => { if (Date.now() >= nextAt && !busy) scan('timer'); }), 5000);
