@@ -133,7 +133,7 @@ const heart = () => {
 };
 const SHAPES = {
     // BMW's: flat top, the right side follows the gauge, the left side an inverted half diamond (in to ML, back out)
-    bmw: poly([[0, 0], [0.83, 0], [1, 0.505], [0.72, 1], [0.35, 1], [0.483, 0.505]]),
+    bmw: poly([[0, 0], [0.8, 0], [0.9, 0.5], [0.76, 0.78], [0.41, 0.78], [0.483, 0.5]]),   // ends above the tach needle (Nov 18 photo)
     full: { circle: 0.5 },                                       // the whole gauge face
     circle: { circle: 0.4 },
     half: poly(arc(0.42, 0.5, 0.5, 0.48, -Math.PI / 2, Math.PI / 2, 40)),   // a D: flat left, round right like the gauge
@@ -141,11 +141,17 @@ const SHAPES = {
     heart: poly(heart()),
     square: poly([[0.12, 0.12], [0.88, 0.12], [0.88, 0.88], [0.12, 0.88]]),
 };
+// every other shape is drawn in the same safe area: clear of the tach's needle and the gauge's rim
+const SAFE = { x: 0.04, y: 0, s: 0.78 };
 const SHAPE_NAMES = ['bmw', 'full', 'circle', 'half', 'diamond', 'heart', 'square', 'off'];
 const FEATHER = 0.05;
 
 /** Signed distance from (u, v) to shape s, in box units: > 0 inside. Works for any simple polygon (bmw isn't convex). */
 function dist(s, u, v) {
+    if (s !== SHAPES.bmw) return SAFE.s * dist0(s, (u - SAFE.x) / SAFE.s, (v - SAFE.y) / SAFE.s);
+    return dist0(s, u, v);
+}
+function dist0(s, u, v) {
     if (s.circle) return s.circle - Math.hypot(u - 0.5, v - 0.5);
     const P = s.poly;
     let d = 1e9, inside = false;
