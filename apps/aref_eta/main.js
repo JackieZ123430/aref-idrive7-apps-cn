@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.15.1';
+const VERSION = '1.16.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -176,7 +176,7 @@ mgu.run({
             const covers = {};          // artwork ver -> { px, n } (150 px)
             const coverFor = (t) => {
                 if (!artwork || !t || !t.title) return null;
-                const e = artwork.get({ title: t.title, artist: t.artist, album: t.album });
+                const e = artwork.get({ title: t.title, artist: t.artist, album: t.album, cover: t.cover });   // cover: the car's own file
                 if (e.state !== 'ready') return null;
                 if (!covers[e.ver]) {
                     Object.keys(covers).forEach((k) => delete covers[k]);

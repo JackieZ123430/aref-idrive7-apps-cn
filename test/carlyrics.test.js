@@ -252,6 +252,19 @@ test('artwork disk cache: a song played again shows offline', async () => {
     assert.strictEqual(b.get(t).state, 'ready');          // no wait and no network: from disk
 });
 
+test('artwork from the car itself: its own cover file, no internet', async () => {
+    const jpg = fs.readFileSync(path.join(__dirname, 'fixtures', 'cover.jpg'));
+    const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mediaramdisk-'));
+    const file = '/tmp/' + path.basename(dir) + '/cover_MGU_MediaEngineWifi_7.jpg';
+    fs.writeFileSync(file, jpg);
+    let net = 0;
+    const a = new ART.Artwork(() => { net++; return Promise.reject(new Error('offline')); }, { info() {}, warn() {} }, undefined, { px: 300, blur: false });
+    const t = { title: 'Night Drive', artist: 'Sample Artist', cover: file };
+    a.get(t); await new Promise((r) => setTimeout(r, 200));
+    const e = a.get(t);
+    assert.strictEqual(e.state, 'ready'); assert.strictEqual(e.n, 300); assert.strictEqual(net, 0);
+});
+
 test('LRC parsing and the line at a time', () => {
     const lines = L.parseLrc('[00:01.00]First\n[00:05.50]Second\n[00:10.00]Third');
     assert.strictEqual(lines.length, 3);

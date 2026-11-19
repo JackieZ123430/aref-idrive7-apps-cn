@@ -2,8 +2,10 @@
 /**
  * artwork.js - the album art for a song, and the blurred backdrop made from it.
  *
- * The car doesn't pass CarPlay's artwork on to apps, so the cover comes from Apple's own iTunes Search
- * API (free, no key): the same artwork Apple Music shows. It is decoded on the car (vendor/jpeg_decoder.js)
+ * The cover comes first from the car itself: BMW's media service saves the phone's artwork for the song playing
+ * (CarPlay sends it) as a JPEG on a RAM disk, and names it in the song's metadata (COVER_FILE, e.g.
+ * /tmp/mediaramdisk_hu/covers/cover_MGU_MediaEngineWifi_7.jpg, readable by apps): no internet needed, and
+ * exactly what Apple Music shows. Without it (no file, not readable), Apple's iTunes Search API (free, no key). It is decoded on the car (vendor/jpeg_decoder.js)
  * into two pixel pictures:
  *
  *   cover: ART_PX x ART_PX, centre-cropped, corners rounded in its alpha
@@ -172,16 +174,18 @@ class Artwork {
     get(track) {
         if (!track || !track.title) return { state: 'none' };
         const k = Artwork.key(track), e = this.cache.get(k), now = Date.now();
-        if (e && !(e.state === 'error' && now - e.at > RETRY_MS) && !(e.state === 'missing' && now - e.at > MISSING_MS)) return e;
+        // offline, iTunes failed: once the car names its own cover file, try again at once
+        const again = e && (e.state === 'error' || e.state === 'missing') && track.cover && e.cover0 !== track.cover;
+        if (e && !again && !(e.state === 'error' && now - e.at > RETRY_MS) && !(e.state === 'missing' && now - e.at > MISSING_MS)) return e;
         if (this.want.k !== k) this.want = { k: k, since: now - (now - this.want.since >= SKIP_MS ? SETTLE_MS : 0) };
         // one lookup at a time, for the song that has stayed current: fast skips start nothing
-        const settled = now - this.want.since >= SETTLE_MS || (this.opts.dir && this._file(k) && require('fs').existsSync(this._file(k)));
+        const settled = now - this.want.since >= SETTLE_MS || !!track.cover || (this.opts.dir && this._file(k) && require('fs').existsSync(this._file(k)));
         // the song that stays current may start beside one older lookup still on its way (at most two)
         if (!this.busy.has(k) && this.busy.size < 2 && settled) {
             this.busy.add(k);
             this._load(track).then((v) => this._put(k, v), (err) => {
                 this.log.warn('artwork: ' + (err && err.message));
-                this._put(k, { state: 'error', at: Date.now() });
+                this._put(k, { state: 'error', at: Date.now(), cover0: track.cover });
             }).then(() => this.busy.delete(k));
         }
         return e || { state: 'loading' };
@@ -198,6 +202,21 @@ class Artwork {
 
     async _load(track) {
         const fs = require('fs'), f = this._file(Artwork.key(track)), t0 = Date.now();
+        // the car's own copy of the phone's artwork (offline; the file can come a moment after the metadata)
+        if (track.cover && /^\/tmp\/mediaramdisk/.test(track.cover) && /\.(jpe?g)$/i.test(track.cover)) {
+            for (let i = 0; i < 4; i++) {
+                try {
+                    const buf = await new Promise((ok, no) => fs.readFile(track.cover, (e, b) => (e ? no(e) : ok(b))));
+                    if (buf.length > 100) {
+                        const v = this.fromJpeg(buf);
+                        if (f) this._save(f, buf);
+                        this.log.info('artwork: from the car in ' + (Date.now() - t0) + ' ms');
+                        return v;
+                    }
+                } catch (e) { if (i === 3) this.log.info('artwork: the car\'s file ' + (e.code || e.message)); }
+                await new Promise((ok) => setTimeout(ok, 300));
+            }
+        }
         if (f) { try { const buf = fs.readFileSync(f); const v = this.fromJpeg(buf); this.log.info('artwork: from disk in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* not cached */ } }
         const term = [LyricsLib.baseTitle(track.title), String(track.artist || '').split(/,|&/)[0]].join(' ');
         const q = querystring.stringify({ term: term, media: 'music', entity: 'song', limit: 10 });
@@ -216,7 +235,7 @@ class Artwork {
                 if (hit) best = hit;
             } catch (e) { /* the song's result stands */ }
         }
-        if (!best) { this.log.info('artwork: none found for "' + track.title + '"'); return { state: 'missing', at: Date.now() }; }
+        if (!best) { this.log.info('artwork: none found for "' + track.title + '"'); return { state: 'missing', at: Date.now(), cover0: track.cover }; }
         const t1 = Date.now(), u = url.parse(sized(best.artworkUrl100, this.opts.px));
         const img = await this.request('GET', u.hostname, u.path, {});
         if (img.status !== 200) throw new Error('artwork HTTP ' + img.status);
