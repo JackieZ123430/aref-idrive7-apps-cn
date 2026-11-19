@@ -159,7 +159,7 @@ const heart = () => {
 const SHAPES = {
     // BMW's: flat top, the right side follows the gauge, the left side an inverted half diamond (in to ML, back out)
     bmw: poly([[0, 0], [0.64, 0], [0.87, 0.32], [0.9, 0.5],   // top right cut: clear of the tach's 40 (Nov 19)
-         [0.7, 0.92], [0.37, 0.92], [0.483, 0.5]]),   // down over the tach; its bottom edge fades (Settings)
+        [0.74, 0.98], [0.23, 0.98], [0.42, 0.5]]),   // down to the gauge's rim, the lower left filled (Nov 19 photo)
     full: { circle: 0.5 },                                       // the whole gauge face
     circle: { circle: 0.4 },
     half: poly(arc(0.42, 0.5, 0.5, 0.48, -Math.PI / 2, Math.PI / 2, 40)),   // a D: flat left, round right like the gauge

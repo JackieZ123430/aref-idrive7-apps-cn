@@ -37,7 +37,10 @@ const DISK_MAX = 300;         // covers kept on disk (opts.dir): a song played a
 /** Lower-case words only, for comparing names ("Lil' Uzi Vert" ~ "lil uzi vert"). */
 function norm(s) { return LyricsLib.fold(String(s || '')).toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
 
-/** The best iTunes result for the song: same title and artist first, else same artist, else the first. */
+/**
+ * The best iTunes result for the song: the same album counts most (a song is on its single, its album and
+ * compilations, each with its own cover; the one playing is the one Apple Music shows), then title and artist.
+ */
 function pick(results, track) {
     const list = (results || []).filter((r) => r && r.artworkUrl100);
     if (!list.length) return null;
@@ -47,7 +50,11 @@ function pick(results, track) {
         let s = 0;
         if (rt === t) s += 4; else if (rt.indexOf(t) >= 0 || t.indexOf(rt) >= 0) s += 2;
         if (a && (ra.indexOf(a) >= 0 || a.indexOf(ra) >= 0)) s += 3;
-        if (track.album && norm(r.collectionName) === norm(track.album)) s += 1;
+        if (track.album) {
+            const ca = norm(r.collectionName), ta = norm(track.album);
+            if (ca === ta) s += 6; else if (ca && ta && (ca.indexOf(ta) >= 0 || ta.indexOf(ca) >= 0)) s += 3;
+        }
+        if (/various artists/i.test(r.collectionArtistName || '')) s -= 2;          // compilations last
         return s;
     };
     const best = list.map((r) => [score(r), r]).sort((x, y) => y[0] - x[0])[0];
@@ -159,7 +166,7 @@ class Artwork {
         if (this.opts.dir) { try { require('fs').mkdirSync(this.opts.dir); } catch (e) { /* there */ } }
     }
 
-    static key(track) { return norm(track.title) + '|' + norm(track.artist); }
+    static key(track) { return norm(track.title) + '|' + norm(track.artist) + '|' + norm(track.album); }
 
     /** The entry for track; starts a lookup when there is none (or a failed one is old). */
     get(track) {
@@ -187,7 +194,7 @@ class Artwork {
         while (this.cache.size > CACHE) this.cache.delete(this.cache.keys().next().value);
     }
 
-    _file(k) { return this.opts.dir ? require('path').join(this.opts.dir, require('crypto').createHash('sha1').update(k).digest('hex').slice(0, 16) + '.jpg') : null; }
+    _file(k) { return this.opts.dir ? require('path').join(this.opts.dir, require('crypto').createHash('sha1').update('v2|' + k).digest('hex').slice(0, 16) + '.jpg') : null; }
 
     async _load(track) {
         const fs = require('fs'), f = this._file(Artwork.key(track)), t0 = Date.now();
@@ -196,7 +203,19 @@ class Artwork {
         const q = querystring.stringify({ term: term, media: 'music', entity: 'song', limit: 10 });
         const r = await this.request('GET', 'itunes.apple.com', '/search?' + q, { Accept: 'application/json' });
         if (r.status !== 200) throw new Error('iTunes search HTTP ' + r.status);
-        const best = pick((JSON.parse(r.body.toString('utf8')) || {}).results, track);
+        let best = pick((JSON.parse(r.body.toString('utf8')) || {}).results, track);
+        // the album known but no song on it found: look the album up itself, its cover is the one Apple Music shows
+        if (track.album && !(best && norm(best.collectionName) === norm(track.album))) {
+            const qa = querystring.stringify({ term: track.album + ' ' + String(track.artist || '').split(/,|&/)[0], media: 'music', entity: 'album', limit: 10 });
+            try {
+                const ra = await this.request('GET', 'itunes.apple.com', '/search?' + qa, { Accept: 'application/json' });
+                const albums = ra.status === 200 ? ((JSON.parse(ra.body.toString('utf8')) || {}).results || []) : [];
+                const a0 = norm(String(track.artist || '').split(/,|&| feat\.? | x /i)[0]);
+                const hit = albums.find((x) => x && x.artworkUrl100 && norm(x.collectionName) === norm(track.album) &&
+                    (!a0 || norm(x.artistName).indexOf(a0) >= 0 || a0.indexOf(norm(x.artistName)) >= 0));
+                if (hit) best = hit;
+            } catch (e) { /* the song's result stands */ }
+        }
         if (!best) { this.log.info('artwork: none found for "' + track.title + '"'); return { state: 'missing', at: Date.now() }; }
         const t1 = Date.now(), u = url.parse(sized(best.artworkUrl100, this.opts.px));
         const img = await this.request('GET', u.hostname, u.path, {});
