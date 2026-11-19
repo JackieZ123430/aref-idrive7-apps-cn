@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.10.0';
+const VERSION = '1.11.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -181,8 +181,7 @@ mgu.run({
                 if (!covers[e.ver]) {
                     Object.keys(covers).forEach((k) => delete covers[k]);
                     // the small cover, and a 300 px one for the backdrop (the same object while the song plays)
-                    covers[e.ver] = { px: ART.squareResample(e.cover, ART.ART_PX, ART.ART_PX, 150, 0).px, n: 150,
-                        big: { px: ART.squareResample(e.cover, ART.ART_PX, ART.ART_PX, 300, 0).px, n: 300 } };
+                    covers[e.ver] = { px: ART.squareResample(e.cover, e.n, e.n, 150, 0).px, n: 150, big: { px: e.cover, n: e.n } };
                 }
                 return covers[e.ver];
             };
@@ -198,7 +197,7 @@ mgu.run({
                     np = new NP.NowPlaying(ctx.signals, log, NP_IFACES);
                     np.start().catch((e) => log.warn('nowplaying: ' + e.message));
                     const net = http.client(ctx.dataDir);
-                    artwork = new ART.Artwork((m, h, p, hd) => net.request(m, h, p, hd), log);
+                    artwork = new ART.Artwork((m, h, p, hd) => net.request(m, h, p, hd), log, undefined, { px: 300, blur: false, dir: path.join(ctx.dataDir, 'covers') });
                 }
                 const t = kind === 'music' && np ? np.track() : null;
                 const cov = coverFor(t), c = SLOT.content(kind, car.data(), Date.now(), t, cov);

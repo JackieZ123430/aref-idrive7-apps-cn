@@ -173,9 +173,12 @@ function dist0(s, u, v) {
  */
 const FADE_LEN = 0.35;
 const DEF_LOOK = { soft: FEATHER, opacity: 1, fade: 'none' };
-function drawBackdrop(px, n, shape, look) {
-    const L = Object.assign({}, DEF_LOOK, look);
-    const out = Buffer.alloc(BW * BH * 4), D = new Float32Array(BW * BH);
+/** The shape's alpha (0..255 per backdrop pixel): the slow part, made once per shape and look, not per song. */
+let maskKey = null, maskA = null;
+function backdropMask(shape, L) {
+    const key = shape + JSON.stringify(L);
+    if (key === maskKey) return maskA;
+    const D = new Float32Array(BW * BH), A = new Uint8Array(BW * BH);
     const s = SHAPES[shape] || SHAPES.bmw;
     let x0 = 1, x1 = 0, y0 = 1, y1 = 0;          // the shape's extent, for the side fade
     for (let y = 0; y < BH; y++) {
@@ -195,8 +198,23 @@ function drawBackdrop(px, n, shape, look) {
             const k = L.fade === 'bottom' ? (y1 - v) / len : L.fade === 'top' ? (v - y0) / len
                 : L.fade === 'left' ? (u - x0) / len : L.fade === 'right' ? (x1 - u) / len : 1;
             if (k < 1) { const f = Math.max(0, k); a *= f * f * (3 - 2 * f); }
-            const si = ((Math.floor(y * n / BH) * n) + Math.floor(x * n / BW)) * 4, di = (y * BW + x) * 4;
-            out[di] = px[si] * 0.6; out[di + 1] = px[si + 1] * 0.6; out[di + 2] = px[si + 2] * 0.6; out[di + 3] = Math.round(a * 240 * L.opacity);
+            A[y * BW + x] = Math.round(a * 240 * L.opacity);
+        }
+    }
+    maskKey = key; maskA = A;
+    return A;
+}
+
+function drawBackdrop(px, n, shape, look) {
+    const A = backdropMask(shape, Object.assign({}, DEF_LOOK, look));
+    const out = Buffer.alloc(BW * BH * 4);
+    for (let y = 0; y < BH; y++) {
+        const sy = Math.floor(y * n / BH) * n;
+        for (let x = 0; x < BW; x++) {
+            const a = A[y * BW + x];
+            if (!a) continue;
+            const si = (sy + Math.floor(x * n / BW)) * 4, di = (y * BW + x) * 4;
+            out[di] = px[si] * 0.6; out[di + 1] = px[si + 1] * 0.6; out[di + 2] = px[si + 2] * 0.6; out[di + 3] = a;
         }
     }
     return out;

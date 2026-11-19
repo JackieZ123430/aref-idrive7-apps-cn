@@ -221,12 +221,34 @@ test('artwork lookup goes through iTunes and caches the result', async () => {
         return Promise.resolve({ status: 200, body: jpg });
     };
     const a = new ART.Artwork(request, { info() {}, warn() {} });
+    // skipping fast: songs that don't stay current start nothing
+    a.get({ title: 'Skipped', artist: 'Someone' });
     assert.strictEqual(a.get({ title: 'Night Drive', artist: 'Sample Artist' }).state, 'loading');
+    assert.strictEqual(calls.length, 0);
+    await new Promise((r) => setTimeout(r, 750));
+    a.get({ title: 'Night Drive', artist: 'Sample Artist' });
     await new Promise((r) => setTimeout(r, 200));
     const e = a.get({ title: 'Night Drive', artist: 'Sample Artist' });
     assert.strictEqual(e.state, 'ready');
     assert.strictEqual(e.ver, 1);
     assert.deepStrictEqual(calls, ['itunes.apple.com/search?term=Night%20Drive%20Sample%20Artist&media=music&entity=song&limit=10', 'is1-ssl.mzstatic.com/image/x/600x600bb.jpg']);
+});
+
+test('artwork disk cache: a song played again shows offline', async () => {
+    const jpg = fs.readFileSync(path.join(__dirname, 'fixtures', 'cover.jpg'));
+    const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'covers-'));
+    const online = (m, host) => Promise.resolve(host === 'itunes.apple.com'
+        ? { status: 200, body: Buffer.from(JSON.stringify({ results: [{ trackName: 'Night Drive', artistName: 'Sample Artist', artworkUrl100: 'https://x/100x100bb.jpg' }] })) }
+        : { status: 200, body: jpg });
+    const t = { title: 'Night Drive', artist: 'Sample Artist' }, log = { info() {}, warn() {} };
+    const a = new ART.Artwork(online, log, undefined, { px: 300, blur: false, dir: dir });
+    a.get(t); await new Promise((r) => setTimeout(r, 750)); a.get(t); await new Promise((r) => setTimeout(r, 200));
+    const e = a.get(t);
+    assert.strictEqual(e.state, 'ready'); assert.strictEqual(e.n, 300); assert.ok(!e.blur);
+    assert.strictEqual(fs.readdirSync(dir).length, 1);
+    const b = new ART.Artwork(() => Promise.reject(new Error('offline')), log, undefined, { px: 300, blur: false, dir: dir });
+    b.get(t); await new Promise((r) => setTimeout(r, 200));
+    assert.strictEqual(b.get(t).state, 'ready');          // no wait and no network: from disk
 });
 
 test('LRC parsing and the line at a time', () => {
