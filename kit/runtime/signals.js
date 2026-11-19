@@ -57,7 +57,9 @@ async function watch(iface, instance, handlers, log, opts) {
         const cfg = loadConfig(iface);
         const p = await nativeTick(() => someip.buildProxy(cfg, String(instance)).then((px) => px.init().then(() => px)));
         res.proxy = p;
-        res.shutdown = () => Promise.resolve().then(() => p.shutdown && p.shutdown()).catch(() => {});
+        let poll = null;
+        // shutdown also ends the re-reads and marks it unavailable (an app going idle)
+        res.shutdown = () => { if (poll) clearInterval(poll); poll = null; res.available = false; return Promise.resolve().then(() => p.shutdown && p.shutdown()).catch(() => {}); };
         const fields = Object.keys(handlers || {});
         const fetchAll = () => fields.forEach((f) => {
             if (cfg.fields && cfg.fields[f] && cfg.fields[f].getter) {
@@ -75,7 +77,7 @@ async function watch(iface, instance, handlers, log, opts) {
             }
         }
         if (p.isAvailable && p.isAvailable()) { res.available = true; fetchAll(); }
-        if (opts && opts.pollMs) setInterval(() => { if (res.available) setImmediate(fetchAll); }, opts.pollMs);
+        if (opts && opts.pollMs) poll = setInterval(() => { if (res.available) setImmediate(fetchAll); }, opts.pollMs);
     } catch (e) {
         res.error = String(e);
         if (log) log.warn('signals ' + iface + ': ' + e);

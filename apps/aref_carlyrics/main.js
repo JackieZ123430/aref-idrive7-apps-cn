@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -54,6 +54,7 @@ const FADE_MS = 320;              // a line brightens (and the last one fades) o
 const NUDGE = 0.3;                // share of the gap to a new time from the car that the clock takes at once
 const SNAP_MS = 1500;             // a gap bigger than this (a seek, a skip back) is jumped, not glided
 const HOLD_MS = 4000;             // the clock runs at most this far past the car's last time
+const IDLE_MS = 60000;            // off screen this long: the app goes idle (no subscriptions, no timers)
 const REPORT_MS = 60000;          // carlyrics-probe.txt is written again this often (when anything changed)
 // the lyrics as Apple Music on a Mac draws them: big bold text, wrapped; the line being sung full white,
 // the ones to come at 40 %, the ones sung at 25 %, both softly blurred, more the further they are
@@ -126,6 +127,7 @@ mgu.run({
             /* ---------- the track, and the clock that follows the car's time in it ---------- */
             let cur = null;           // { key, title, artist, album, duration, playing }
             let clk = null;           // { pos, at, playing, last }: the song's time pos (ms) at at (ms epoch)
+            let idle = false;         // off screen a minute: subscriptions closed (see "idle off screen" below)
             let startAt = Date.now(); // a source with no time of its own: when the song (probably) began
             const clockAt = (now) => clk.pos + (clk.playing ? Math.min(now - clk.at, HOLD_MS) : 0);
             const follow = () => {
@@ -400,7 +402,7 @@ mgu.run({
             };
             ctx.onLayout(guard('layout', () => showButtons(true)));
             showButtons();
-            setInterval(guard('buttons', showButtons), 3000);
+            setInterval(guard('buttons', () => { if (!idle) showButtons(); }), 3000);
             ui.onClick('BTN_PROBE', guard('probe', () => { probe = !probe; page = 0; vpage = 0; showButtons(); }));
             const nextPage = () => { page = (page + 1) % PAGES.length; vpage = 0; };
             ui.onClick('BTN_PAGE', guard('page', nextPage));
@@ -427,7 +429,7 @@ mgu.run({
             };
             const saveNow = () => { saveReport(); say('Saved to ' + reportFile, 5000); };
             ui.onClick('BTN_SAVE', guard('save', saveNow));
-            setInterval(guard('report', () => { if (np.values().length) saveReport(); }), REPORT_MS);
+            setInterval(guard('report', () => { if (!idle && np.values().length) saveReport(); }), REPORT_MS);
 
             // the values that say most about what is playing first: metadata, item, title, state, time
             const RANK = /metadata|item|title|artist|album|state|time|track|song/i;
@@ -471,6 +473,31 @@ mgu.run({
             catalog = NP.scanCatalog();
             log.info('catalog: ' + (catalog.error ? 'error ' + catalog.error : catalog.total + ' interfaces, ' + catalog.hits.length + ' look like media'));
             np.start().then(() => log.info('subscribed: ' + JSON.stringify(np.status())), (e) => log.error('nowplaying start: ' + (e && e.stack || e)));
+
+            /* ---------- idle off screen: a minute after the screen goes, nothing runs until it's back ---------- */
+            // the app can't quit itself (an app that exits on its own gets its data wiped by the head unit), so it goes
+            // quiet instead: subscriptions closed, timers skip, caches dropped, memory collected
+            let idleTimer = null;
+            const goIdle = guard('idle', () => {
+                idleTimer = null;
+                if (idle || ui.isVisible('MAIN')) return;
+                idle = true;
+                np.pause(); cur = null; clk = null;
+                if (artwork.cache) artwork.cache.clear();
+                if (lyrics.cache) lyrics.cache.clear();
+                if (typeof global.gc === 'function') { try { global.gc(); } catch (e) { /* */ } }
+                log.info('idle: off screen, subscriptions closed');
+            });
+            ui.onVisible(guard('visible', (name, v) => {
+                if (name !== 'MAIN') return;
+                if (!v) { if (!idleTimer && !idle) idleTimer = setTimeout(goIdle, IDLE_MS); return; }
+                if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+                if (idle) {
+                    idle = false;
+                    np.start().then(() => log.info('awake: subscribed again'), (e) => log.error('nowplaying restart: ' + (e && e.message)));
+                }
+            }));
+            if (!ui.isVisible('MAIN')) idleTimer = setTimeout(goIdle, IDLE_MS);
             log.info('started ' + VERSION);
         } catch (e) {
             log.error('start: ' + (e && e.stack || e));
