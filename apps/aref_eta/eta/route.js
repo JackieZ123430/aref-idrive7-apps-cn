@@ -82,4 +82,38 @@ function leftText(sec) {
     return mins < 60 ? mins + ' min' : Math.floor(mins / 60) + ' h ' + (mins % 60 < 10 ? '0' : '') + (mins % 60) + ' min';
 }
 
-module.exports = { decode, pick, finalOf, arrivalText, leftText };
+/**
+ * Traffic, guessed: CarPlay never sends Apple Maps' delay to the car (every route logged: delayStatus UNDEFINED,
+ * delayTime 0), so the colour comes from what it does send, the time and distance left:
+ *   slip   the arrival time getting later than the earliest one this route had (traffic building as you drive)
+ *   pace   the average speed Apple's time left implies for the distance left, against what open roads allow
+ *          (45 mph over 12 mi or more, 30 mph over 4-12 mi; under 4 mi it can't tell a city street from a jam)
+ * The worse of the two: yellow from 3 min late (slip) or 4 min and 25 % over (pace), red from 8 min / 10 min and 35 %.
+ * Apple's own colour wins whenever the car does send one.
+ */
+class TrafficGuess {
+    constructor() { this.reset(); }
+    reset() { this.best = null; this.start = null; this.last = null; }
+    apply(r, now) {
+        if (!r || !r.travelSec) return r;
+        const arr = now + r.travelSec * 1000;
+        if (this.start === null) this.start = now;
+        // the earliest arrival after the first half minute (the phone's first numbers settle)
+        if (now - this.start > 30000 && (this.best === null || arr < this.best)) this.best = arr;
+        const slipMin = this.best === null ? 0 : (arr - this.best) / 60000;
+        let paceMin = 0;
+        const mi = r.rawDist ? r.rawDist / 1609.34 : null;
+        if (mi !== null && mi >= 4) {
+            const free = (mi / (mi >= 12 ? 45 : 30)) * 60, mins = r.travelSec / 60;
+            if (mins > free) paceMin = (mins - free) / mins >= 0.25 ? mins - free : 0;
+            if (paceMin && (mins - free) / mins < 0.35 && paceMin >= 10) paceMin = 9.9;   // red needs both 10 min and 35 %
+        }
+        const lvl = (x, y, z) => (x >= y ? 2 : x >= z ? 1 : 0);
+        const level = Math.max(lvl(slipMin, 8, 3), lvl(paceMin, 10, 4));
+        this.last = { slipMin: Math.round(slipMin * 10) / 10, paceMin: Math.round(paceMin * 10) / 10, level: level };
+        if (!r.traffic) r = Object.assign({}, r, { traffic: ['green', 'yellow', 'red'][level], guessed: true });
+        return r;
+    }
+}
+
+module.exports = { TrafficGuess, decode, pick, finalOf, arrivalText, leftText };

@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.16.0';
+const VERSION = '1.17.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -123,10 +123,21 @@ mgu.run({
             // the route the cluster shows, or null. Turning the car off doesn't always say so: CarPlay's signals just
             // stop (Nov 12: the ETA stayed up). A route whose numbers haven't moved for STALE_MS counts as gone.
             const STALE_MS = 90000;
+            // traffic colour, guessed from the time and distance left (CarPlay never sends Apple Maps' delay)
+            const tg = new R.TrafficGuess();
+            let tgGone = 0, tgLevel = -1;
             const stripRoute = () => {
-                const r = trip(), w = vals['carplay.waypoints'];
-                if (w && Date.now() - w.at > STALE_MS) return null;
-                return guiding() && r && r.src === 'carplay' ? r : null;   // BMW's strip is blank only during a CarPlay route
+                const r0 = trip(), w = vals['carplay.waypoints'], now = Date.now();
+                const r = (w && now - w.at > STALE_MS) ? null : guiding() && r0 && r0.src === 'carplay' ? r0 : null;   // BMW's strip is blank only during a CarPlay route
+                if (!r) { if (!tgGone) tgGone = now; else if (now - tgGone > 120000) { tg.reset(); tgLevel = -1; } return null; }
+                tgGone = 0;
+                const g = tg.apply(r, now);
+                if (tg.last && tg.last.level !== tgLevel) {
+                    tgLevel = tg.last.level;
+                    note2('traffic guess ' + ['green', 'yellow', 'red'][tgLevel] + ': ' + Math.round(r.travelSec / 60) + ' min for ' + (r.rawDist ? (r.rawDist / 1609.34).toFixed(1) : '?') +
+                        ' mi, arrival slipped ' + tg.last.slipMin + ' min, pace ' + tg.last.paceMin + ' min over open roads');
+                }
+                return g;
             };
             const style = () => {
                 const g = (k, d) => { const v = ctx.settings.get(k); return v === undefined || v === null ? d : v; };
