@@ -85,22 +85,26 @@ function leftText(sec) {
 /**
  * Traffic, guessed: CarPlay never sends Apple Maps' delay to the car (every route logged: delayStatus UNDEFINED,
  * delayTime 0), so the colour comes from what it does send, the time and distance left:
- *   slip   the arrival time getting later than the earliest one this route had (traffic building as you drive)
+ *   slip   the arrival time getting later than the earliest one of the last 8 minutes (traffic you're in now; once
+ *          the arrival stops slipping, the minutes lost drop out of the window and it's green again)
  *   pace   the average speed Apple's time left implies for the distance left, against what open roads allow
  *          (45 mph over 12 mi or more, 30 mph over 4-12 mi; under 4 mi it can't tell a city street from a jam)
  * The worse of the two: yellow from 3 min late (slip) or 4 min and 25 % over (pace), red from 8 min / 10 min and 35 %.
  * Apple's own colour wins whenever the car does send one.
  */
+const WINDOW_MS = 8 * 60000;
 class TrafficGuess {
     constructor() { this.reset(); }
-    reset() { this.best = null; this.start = null; this.last = null; }
+    reset() { this.hist = []; this.start = null; this.last = null; }
     apply(r, now) {
         if (!r || !r.travelSec) return r;
         const arr = now + r.travelSec * 1000;
         if (this.start === null) this.start = now;
-        // the earliest arrival after the first half minute (the phone's first numbers settle)
-        if (now - this.start > 30000 && (this.best === null || arr < this.best)) this.best = arr;
-        const slipMin = this.best === null ? 0 : (arr - this.best) / 60000;
+        // the earliest arrival of the last WINDOW_MS, after the first half minute (the phone's first numbers settle)
+        if (now - this.start > 30000) this.hist.push([now, arr]);
+        while (this.hist.length && now - this.hist[0][0] > WINDOW_MS) this.hist.shift();
+        const best = this.hist.reduce((b, x) => (b === null || x[1] < b ? x[1] : b), null);
+        const slipMin = best === null ? 0 : Math.max(0, (arr - best) / 60000);
         let paceMin = 0;
         const mi = r.rawDist ? r.rawDist / 1609.34 : null;
         if (mi !== null && mi >= 4) {
