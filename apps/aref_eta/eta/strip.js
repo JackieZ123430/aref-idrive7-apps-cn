@@ -186,16 +186,49 @@ class Strip {
             if (this.pending) { setTimeout(() => { if (this.pending) this.update(this.pending.route, this.pending.arrival); }, MAP_WAIT_MS + 50); return; }
             if (want !== this.shown) {
                 this.shown = want;
-                this.cr.set(this.ref, { visible: want });
-                if (want && this.cr.animate) {
-                    try {
-                        if (this.rise && this.cr.stop) this.cr.stop(this.ref, this.rise);      // one at a time (a layer plays at most 16)
-                        this.rise = this.cr.animate(this.ref, { property: 'translate', keys: '0:0,14,0 320:0,0,0' });
-                    } catch (e) { /* an older renderer: no rise */ }
-                }
+                if (want) this.springIn(); else this.springOut();
                 this.note('cluster: ' + (want ? 'show ' + p.map((q) => q.v + (q.u ? ' ' + q.u : '')).join(' · ') : 'hide'));
             }
         } catch (e) { this.state.reason = 'draw: ' + e.message; }
+    }
+
+    /**
+     * The bottom strip comes and goes as one piece, text and background together, like Dynamic Island: in, it grows
+     * from 55 % with a little overshoot and rises; out, it pulls in slightly, then shrinks and drops away. The
+     * renderer plays the keys itself; opacity steps ride along (an image layer's opacity is set, not animated).
+     */
+    _springStop() {
+        (this.springTimers || []).forEach(clearTimeout); this.springTimers = [];
+        (this.springAnims || []).forEach((a) => { try { this.cr.stop(this.ref, a); } catch (e) { /* */ } }); this.springAnims = [];
+        if (this.rise && this.cr.stop) { try { this.cr.stop(this.ref, this.rise); } catch (e) { /* */ } this.rise = null; }
+    }
+    _springAt(ms, fn) { this.springTimers.push(setTimeout(() => { try { fn(); } catch (e) { this.state.reason = 'spring: ' + e.message; } }, ms)); }
+    springIn() {
+        this._springStop();
+        const E = ISL.ease, K = ISL.keys;
+        try {
+            this.cr.set(this.ref, { opacity: 0 });
+            this.cr.set(this.ref, { visible: true });
+            if (this.cr.animate) {
+                this.springAnims.push(this.cr.animate(this.ref, { property: 'scale', keys: K(0, 520, 16, (t) => { const k = E.outBack(t); return [0.55 + 0.45 * k, 0.7 + 0.3 * k, 1]; }) }));
+                this.springAnims.push(this.cr.animate(this.ref, { property: 'translate', keys: K(0, 420, 10, (t) => [0, 18 * (1 - E.outCubic(t)), 0]) }));
+            }
+            [[40, 0.35], [90, 0.7], [140, 1]].forEach((x) => this._springAt(x[0], () => this.cr.set(this.ref, { opacity: x[1] })));
+        } catch (e) { this.cr.set(this.ref, { visible: true, opacity: 1 }); }
+    }
+    springOut() {
+        this._springStop();
+        const E = ISL.ease, K = ISL.keys;
+        try {
+            if (this.cr.animate) {
+                // a short pull-in (to 103 %), then down to 55 % wide and 70 % tall
+                this.springAnims.push(this.cr.animate(this.ref, { property: 'scale', keys: '0:1,1,1 70:1.03,1.03,1 ' +
+                    K(70, 330, 10, (t) => { const k = E.inCubic(t); return [1.03 - 0.48 * k, 1.03 - 0.33 * k, 1]; }).split(' ').slice(1).join(' ') }));
+                this.springAnims.push(this.cr.animate(this.ref, { property: 'translate', keys: K(90, 330, 8, (t) => [0, 16 * E.inCubic(t), 0], true) }));
+            }
+            [[150, 0.7], [220, 0.35], [290, 0]].forEach((x) => this._springAt(x[0], () => this.cr.set(this.ref, { opacity: x[1] })));
+            this._springAt(340, () => { this.cr.set(this.ref, { visible: false }); this._springStop(); this.cr.set(this.ref, { opacity: 1 }); });
+        } catch (e) { this.cr.set(this.ref, { visible: false }); }
     }
 
     /** The island preset: pops out of the camera on the schedule, shrinks back in between (island.js). */

@@ -232,4 +232,4 @@ function preview(img, iw, ih, look) {
     return { w: cv.w, h: cv.h, data: pixels(cv) };
 }
 
-module.exports = { Island, preview, PH };
+module.exports = { Island, preview, PH, ease, keys };
