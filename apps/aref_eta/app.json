@@ -2,7 +2,7 @@
   "id": "aref_eta",
   "title": "ETA Bar",
   "description": "Apple Maps' arrival time, time left and distance on the instrument cluster while Apple Maps guides on CarPlay. Two presets: the bottom strip's blank space (black, smoked, outline or plain), or an island at the top that pops out of the driver attention camera like iPhone's Dynamic Island, once or every 10 s to 5 min. Updates with every route change. Starts with the car. Needs the Cluster renderer tool from the Store.",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "vendor": "aref",
   "loggingId": "OAR7",
   "mguAppStartType": "autostart",
@@ -352,8 +352,8 @@
       ]
     },
     {
-      "key": "music_soft",
-      "label": "Music backdrop edge",
+      "key": "music_edge_top",
+      "label": "Music backdrop: top edge",
       "type": "choice",
       "default": "soft",
       "options": [
@@ -370,8 +370,96 @@
           "Softer"
         ],
         [
-          "softest",
-          "Softest"
+          "fade",
+          "Fade (gradient)"
+        ],
+        [
+          "long",
+          "Long fade"
+        ]
+      ]
+    },
+    {
+      "key": "music_edge_bottom",
+      "label": "Music backdrop: bottom edge",
+      "type": "choice",
+      "default": "fade",
+      "options": [
+        [
+          "sharp",
+          "Sharp"
+        ],
+        [
+          "soft",
+          "Soft"
+        ],
+        [
+          "softer",
+          "Softer"
+        ],
+        [
+          "fade",
+          "Fade (gradient)"
+        ],
+        [
+          "long",
+          "Long fade"
+        ]
+      ]
+    },
+    {
+      "key": "music_edge_left",
+      "label": "Music backdrop: left edge",
+      "type": "choice",
+      "default": "soft",
+      "options": [
+        [
+          "sharp",
+          "Sharp"
+        ],
+        [
+          "soft",
+          "Soft"
+        ],
+        [
+          "softer",
+          "Softer"
+        ],
+        [
+          "fade",
+          "Fade (gradient)"
+        ],
+        [
+          "long",
+          "Long fade"
+        ]
+      ]
+    },
+    {
+      "key": "music_edge_right",
+      "label": "Music backdrop: right edge",
+      "type": "choice",
+      "default": "soft",
+      "options": [
+        [
+          "sharp",
+          "Sharp"
+        ],
+        [
+          "soft",
+          "Soft"
+        ],
+        [
+          "softer",
+          "Softer"
+        ],
+        [
+          "fade",
+          "Fade (gradient)"
+        ],
+        [
+          "long",
+          "Long fade"
         ]
       ]
     },
@@ -396,34 +484,6 @@
         [
           "40",
           "40 %"
-        ]
-      ]
-    },
-    {
-      "key": "music_fade",
-      "label": "Music backdrop fades out toward",
-      "type": "choice",
-      "default": "none",
-      "options": [
-        [
-          "none",
-          "No side (even)"
-        ],
-        [
-          "bottom",
-          "Bottom"
-        ],
-        [
-          "right",
-          "Right"
-        ],
-        [
-          "left",
-          "Left"
-        ],
-        [
-          "top",
-          "Top"
         ]
       ]
     },

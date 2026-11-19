@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.11.0';
+const VERSION = '1.12.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -190,9 +190,11 @@ mgu.run({
                 const kind = slotKind();
                 if (kind === 'off' && !strip.slot.shown) return;        // idle: nothing to draw or hide
                 strip.slot.setShape(ctx.settings.get('music_shape') || 'bmw');
-                const SOFT = { sharp: 0.02, soft: 0.05, softer: 0.12, softest: 0.22 };
-                strip.slot.setLook({ soft: SOFT[ctx.settings.get('music_soft')] || 0.05,
-                    opacity: (Number(ctx.settings.get('music_opacity')) || 100) / 100, fade: ctx.settings.get('music_fade') || 'none' });
+                // each side's edge: Settings > Music backdrop top / bottom / left / right edge
+                const EDGE = { sharp: 0.015, soft: 0.05, softer: 0.12, fade: 0.25, long: 0.45 };
+                const edge = (k, d) => EDGE[ctx.settings.get('music_edge_' + k)] || EDGE[d];
+                strip.slot.setLook({ top: edge('top', 'soft'), bottom: edge('bottom', 'fade'), left: edge('left', 'soft'), right: edge('right', 'soft'),
+                    opacity: (Number(ctx.settings.get('music_opacity')) || 100) / 100 });
                 if (kind === 'music' && !np) {          // started on first use: it subscribes to a lot
                     np = new NP.NowPlaying(ctx.signals, log, NP_IFACES);
                     np.start().catch((e) => log.warn('nowplaying: ' + e.message));

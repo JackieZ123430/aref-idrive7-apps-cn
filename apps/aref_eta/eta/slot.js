@@ -17,7 +17,7 @@
  */
 const { Canvas } = require('./kit/canvas');
 
-const SW = 420, SH = 260;                               // the picture
+const SW = 420, SH = 300;                               // the picture
 // its centre on the cluster: where BMW's own widget sits (its icon and "No active entertainment source", measured
 // from Aref's Nov 16 photo: centre x ~1420, y ~292, about 365 x 250 cluster px)
 const DEF = { x: 1465, y: 340, scale: 1 };           // (Nov 16: moved toward the gauge's middle, Aref's photo)
@@ -82,7 +82,7 @@ function draw(c, fonts) {
         if (cols === 2) cv.fillRect(SW / 2, 78, 1, 110, DIM);
     } else if (c && c.music) {
         // as BMW's own widget: the picture on top, centred, the title and the artist under it
-        const m = c.music, n = 140, x0 = (SW - n) / 2, y0 = 6;
+        const m = c.music, n = 140, x0 = (SW - n) / 2, y0 = 46;   // (Nov 19: 20 px lower on the cluster)
         if (m.cover && m.cover.px) {
             // the cover, scaled into n x n with rounded corners (nearest from the square it came as)
             const src = m.cover.px, sn = m.cover.n, r = 14;
@@ -133,7 +133,7 @@ const heart = () => {
 };
 const SHAPES = {
     // BMW's: flat top, the right side follows the gauge, the left side an inverted half diamond (in to ML, back out)
-    bmw: poly([[0, 0], [0.8, 0], [0.9, 0.5], [0.76, 0.78], [0.41, 0.78], [0.483, 0.5]]),   // ends above the tach needle (Nov 18 photo)
+    bmw: poly([[0, 0], [0.8, 0], [0.9, 0.5], [0.7, 0.92], [0.37, 0.92], [0.483, 0.5]]),   // down over the tach; its bottom edge fades (Settings)
     full: { circle: 0.5 },                                       // the whole gauge face
     circle: { circle: 0.4 },
     half: poly(arc(0.42, 0.5, 0.5, 0.48, -Math.PI / 2, Math.PI / 2, 40)),   // a D: flat left, round right like the gauge
@@ -142,9 +142,8 @@ const SHAPES = {
     square: poly([[0.12, 0.12], [0.88, 0.12], [0.88, 0.88], [0.12, 0.88]]),
 };
 // every other shape is drawn in the same safe area: clear of the tach's needle and the gauge's rim
-const SAFE = { x: 0.04, y: 0, s: 0.78 };
+const SAFE = { x: 0.04, y: 0, s: 0.9 };
 const SHAPE_NAMES = ['bmw', 'full', 'circle', 'half', 'diamond', 'heart', 'square', 'off'];
-const FEATHER = 0.05;
 
 /** Signed distance from (u, v) to shape s, in box units: > 0 inside. Works for any simple polygon (bmw isn't convex). */
 function dist(s, u, v) {
@@ -168,36 +167,59 @@ function dist0(s, u, v) {
 
 /**
  * The backdrop: the cover dimmed, in the chosen shape with a soft edge (shape 'bmw' when unknown).
- * look: { soft: edge feather in box units, opacity 0..1, fade: 'none'|'bottom'|'top'|'left'|'right' (that side
- * fades out over its last FADE_LEN of the shape, to let a gauge show through without moving the backdrop) }.
+ * look: { top, bottom, left, right: each side's fade width in box units, opacity 0..1 }: a side over a gauge can
+ * fade out instead of moving the whole backdrop.
  */
-const FADE_LEN = 0.35;
-const DEF_LOOK = { soft: FEATHER, opacity: 1, fade: 'none' };
-/** The shape's alpha (0..255 per backdrop pixel): the slow part, made once per shape and look, not per song. */
+const DEF_LOOK = { top: 0.05, bottom: 0.25, left: 0.05, right: 0.05, opacity: 1 };
+/**
+ * The shape's alpha (0..255 per backdrop pixel), made once per shape and look, not per song. Each side has its
+ * own edge: look.top / bottom / left / right are fade widths in box units (0.015 sharp .. 0.45 a long gradient).
+ * An edge's width comes from the way it faces (a slanted edge mixes its two sides), and a pixel's alpha is the
+ * lowest over all edges of its distance to that edge over the edge's width, so the fades meet without seams.
+ */
 let maskKey = null, maskA = null;
+function edgesOf(s) {
+    if (s.edges) return s.edges;
+    const P = s.poly, E = [];
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+        const ax = P[j][0], ay = P[j][1], ex = P[i][0] - ax, ey = P[i][1] - ay, len = Math.hypot(ex, ey) || 1;
+        let nx = ey / len, ny = -ex / len;                      // outward: the side the midpoint + n is outside
+        const mx = ax + ex / 2 + nx * 0.01, my = ay + ey / 2 + ny * 0.01;
+        if (dist0(s, mx, my) > 0) { nx = -nx; ny = -ny; }
+        E.push({ ax: ax, ay: ay, ex: ex, ey: ey, nx: nx, ny: ny });
+    }
+    return (s.edges = E);
+}
+// squared weights: smooth where an edge turns from one side to the next (no crease in a round fade)
+const widthFor = (nx, ny, L) => {
+    const r = Math.max(nx, 0), l = Math.max(-nx, 0), b = Math.max(ny, 0), t = Math.max(-ny, 0);
+    return (r * r * L.right + l * l * L.left + b * b * L.bottom + t * t * L.top) / Math.max(1e-6, r * r + l * l + b * b + t * t);
+};
 function backdropMask(shape, L) {
     const key = shape + JSON.stringify(L);
     if (key === maskKey) return maskA;
-    const D = new Float32Array(BW * BH), A = new Uint8Array(BW * BH);
-    const s = SHAPES[shape] || SHAPES.bmw;
-    let x0 = 1, x1 = 0, y0 = 1, y1 = 0;          // the shape's extent, for the side fade
+    const A = new Uint8Array(BW * BH);
+    const s0 = SHAPES[shape] || SHAPES.bmw, safe = s0 !== SHAPES.bmw;
+    const E = s0.circle ? null : edgesOf(s0);
     for (let y = 0; y < BH; y++) {
         for (let x = 0; x < BW; x++) {
-            const u = (x + 0.5) / BW, v = (y + 0.5) / BH, d = dist(s, u, v);
-            D[y * BW + x] = d;
-            if (d > 0) { if (u < x0) x0 = u; if (u > x1) x1 = u; if (v < y0) y0 = v; if (v > y1) y1 = v; }
-        }
-    }
-    const len = FADE_LEN * Math.max(x1 - x0, y1 - y0, 0.01);
-    for (let y = 0; y < BH; y++) {
-        for (let x = 0; x < BW; x++) {
-            const d = D[y * BW + x];
+            let u = (x + 0.5) / BW, v = (y + 0.5) / BH, k = 1;
+            if (safe) { u = (u - SAFE.x) / SAFE.s; v = (v - SAFE.y) / SAFE.s; k = SAFE.s; }
+            const d = dist0(s0, u, v);
             if (d <= 0) continue;
-            const u = (x + 0.5) / BW, v = (y + 0.5) / BH;
-            let a = Math.min(1, d / L.soft); a = a * a * (3 - 2 * a);
-            const k = L.fade === 'bottom' ? (y1 - v) / len : L.fade === 'top' ? (v - y0) / len
-                : L.fade === 'left' ? (u - x0) / len : L.fade === 'right' ? (x1 - u) / len : 1;
-            if (k < 1) { const f = Math.max(0, k); a *= f * f * (3 - 2 * f); }
+            let a = 1;
+            if (s0.circle) {
+                const r = Math.hypot(u - 0.5, v - 0.5) || 1e-6;
+                a = d * k / widthFor((u - 0.5) / r, (v - 0.5) / r, L);
+            } else {
+                for (let i = 0; i < E.length; i++) {
+                    const e = E[i], t = Math.max(0, Math.min(1, ((u - e.ax) * e.ex + (v - e.ay) * e.ey) / (e.ex * e.ex + e.ey * e.ey)));
+                    const de = Math.hypot(u - e.ax - e.ex * t, v - e.ay - e.ey * t) * k;
+                    const q = de / widthFor(e.nx, e.ny, L);
+                    if (q < a) a = q;
+                }
+            }
+            a = Math.min(1, a); a = a * a * (3 - 2 * a);
             A[y * BW + x] = Math.round(a * 240 * L.opacity);
         }
     }
