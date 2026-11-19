@@ -17,7 +17,7 @@
  */
 const { Canvas } = require('./kit/canvas');
 
-const SW = 420, SH = 300;                               // the picture
+const SW = 420, SH = 360;                               // the picture
 // its centre on the cluster: where BMW's own widget sits (its icon and "No active entertainment source", measured
 // from Aref's Nov 16 photo: centre x ~1420, y ~292, about 365 x 250 cluster px)
 const DEF = { x: 1465, y: 340, scale: 1 };           // (Nov 16: moved toward the gauge's middle, Aref's photo)
@@ -82,7 +82,7 @@ function draw(c, fonts) {
         if (cols === 2) cv.fillRect(SW / 2, 78, 1, 110, DIM);
     } else if (c && c.music) {
         // as BMW's own widget: the picture on top, centred, the title and the artist under it
-        const m = c.music, n = 140, x0 = (SW - n) / 2, y0 = 46;   // (Nov 19: 20 px lower on the cluster)
+        const m = c.music, n = m.size || 140, x0 = (SW - n) / 2, y0 = 76 - Math.round((n - 140) / 2);   // grows from its middle
         if (m.cover && m.cover.px) {
             // the cover, scaled into n x n with rounded corners (nearest from the square it came as)
             const src = m.cover.px, sn = m.cover.n, r = 14;
@@ -99,14 +99,24 @@ function draw(c, fonts) {
         const C = { align: 'center' };
         cv.text(fit(m.title, 30, SW - 20, B), SW / 2, y0 + n + 42, 30, WHITE, Object.assign({}, B, C));
         cv.text(fit(m.artist, 24, SW - 20, M), SW / 2, y0 + n + 76, 24, GRAY, Object.assign({}, M, { align: 'center' }));
-        if (m.dur && m.pos !== null) {
-            const f = Math.max(0, Math.min(1, m.pos / m.dur)), bw = 180, bx = (SW - bw) / 2, by = SH - 14;
-            cv.roundRect(bx, by, bw, 3, 1.5, [255, 255, 255, 60]);
-            if (f > 0) cv.roundRect(bx, by, Math.max(3, bw * f), 3, 1.5, [255, 106, 0, 255]);
-            const left = Math.max(0, Math.round((m.dur - m.pos) / 1000));
-            cv.text(Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + (left % 60), bx + bw + 10, by + 6, 18, GRAY, M);
-        }
     }
+    return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length);
+}
+
+/**
+ * The progress bar and time left, a small picture of its own (BAR_W x BAR_H): it changes every second, the cover and
+ * names only once a song, so the big picture isn't sent to the cluster each second (Nov 19: ~10 MB a minute).
+ */
+const BAR_W = 380, BAR_H = 24;
+function barTop(n) { return 76 - Math.round((n - 140) / 2) + n + 92; }
+function drawBar(m, fonts, bw) {
+    const cv = new Canvas(BAR_W, BAR_H);
+    cv.clear([0, 0, 0, 0]);
+    const f = Math.max(0, Math.min(1, m.pos / m.dur)), bx = Math.round((BAR_W - bw) / 2), by = 9;   // centred under the cover, as before
+    cv.roundRect(bx, by, bw, 3, 1.5, [255, 255, 255, 60]);
+    if (f > 0) cv.roundRect(bx, by, Math.max(3, bw * f), 3, 1.5, [255, 106, 0, 255]);
+    const left = Math.max(0, Math.round((m.dur - m.pos) / 1000));
+    cv.text(Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + (left % 60), bx + bw + 10, by + 6, 18, GRAY, { font: fonts.med, literal: true });
     return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length);
 }
 
@@ -133,7 +143,8 @@ const heart = () => {
 };
 const SHAPES = {
     // BMW's: flat top, the right side follows the gauge, the left side an inverted half diamond (in to ML, back out)
-    bmw: poly([[0, 0], [0.8, 0], [0.9, 0.5], [0.7, 0.92], [0.37, 0.92], [0.483, 0.5]]),   // down over the tach; its bottom edge fades (Settings)
+    bmw: poly([[0, 0], [0.64, 0], [0.87, 0.32], [0.9, 0.5],   // top right cut: clear of the tach's 40 (Nov 19)
+         [0.7, 0.92], [0.37, 0.92], [0.483, 0.5]]),   // down over the tach; its bottom edge fades (Settings)
     full: { circle: 0.5 },                                       // the whole gauge face
     circle: { circle: 0.4 },
     half: poly(arc(0.42, 0.5, 0.5, 0.48, -Math.PI / 2, Math.PI / 2, 40)),   // a D: flat left, round right like the gauge
@@ -249,7 +260,8 @@ class Slot {
         this.place = Object.assign({}, DEF, place);
         this.fit = Object.assign({ x: 0, y: 0, scale: 1 }, fit);    // the backdrop's own nudge (Moving: backdrop)
         this.ref = null; this.key = null; this.shown = false; this.at = 0; this.pixels = null;
-        this.bg = null; this.bgCover = null; this.bgShown = false; this.shape = 'bmw'; this.look = Object.assign({}, DEF_LOOK);
+        this.bg = null; this.bgCover = null; this.bgShown = false; this.bar = null; this.barKey = null; this.barShown = false;
+        this.music = { size: 140, bar: 180 }; this.shape = 'bmw'; this.look = Object.assign({}, DEF_LOOK);
     }
 
     /** Settings > backdrop softness, opacity and fade: redrawn at the next update. */
@@ -262,6 +274,20 @@ class Slot {
     setShape(name) {
         if (SHAPE_NAMES.indexOf(name) < 0) name = 'bmw';
         if (name !== this.shape) { this.shape = name; this.bgCover = null; }
+    }
+
+    /** Settings > cover size and bar length (px in the slot's picture). */
+    setMusic(o) {
+        const m = Object.assign({ size: 140, bar: 180 }, o);
+        if (m.size !== this.music.size || m.bar !== this.music.bar) {
+            this.music = m; this.key = null; this.barKey = null;
+            if (this.bar) { try { const r = this.barRect(); this.cr.set(this.bar, { x: r.x, y: r.y, w: r.w, h: r.h }); } catch (e) { /* next */ } }
+        }
+    }
+
+    barRect() {
+        const r = this.rect(), s = this.place.scale;
+        return { x: r.x + Math.round((SW - BAR_W) / 2 * s), y: r.y + Math.round(barTop(this.music.size) * s), w: Math.round(BAR_W * s), h: Math.round(BAR_H * s) };
     }
 
     bgRect() {
@@ -285,6 +311,9 @@ class Slot {
             const b = this.bgRect();
             this.bg = this.cr.image({ target: 'panel', klass: 'content', z: 21, x: b.x, y: b.y, w: b.w, h: b.h, iw: BW, ih: BH,
                 sampling: 'bilinear', fps: 1, visible: false });
+            const k = this.barRect();
+            this.bar = this.cr.image({ target: 'panel', klass: 'content', z: 23, x: k.x, y: k.y, w: k.w, h: k.h, iw: BAR_W, ih: BAR_H,
+                sampling: 'bilinear', fps: 2, visible: false });
         } catch (e) { this.note('slot: ' + e.message); }
     }
 
@@ -294,7 +323,8 @@ class Slot {
         try {
             const show = !!(want && c);
             if (show) {
-                const key = JSON.stringify(c, (k, v) => (k === 'cover' || k === 'bg' ? (v ? k : null) : v));
+                if (c.music) c.music.size = this.music.size;
+                const key = JSON.stringify(c, (k, v) => (k === 'cover' || k === 'bg' ? (v ? k : null) : k === 'pos' ? undefined : v));
                 const now = Date.now();
                 if (key !== this.key && now - this.at >= MIN_MS) {
                     this.key = key; this.at = now;
@@ -303,6 +333,13 @@ class Slot {
                 }
             }
             if (show !== this.shown) { this.shown = show; this.cr.set(this.ref, { visible: show }); this.note('slot: ' + (show ? 'show' : 'hide')); }
+            // the progress bar: its own small picture, at most once a second
+            const bm = show && c && c.music && c.music.dur && c.music.pos !== null ? c.music : null;
+            if (this.bar && bm) {
+                const bk = Math.floor(bm.pos / 1000) + '/' + bm.dur + '/' + this.music.bar;
+                if (bk !== this.barKey) { this.barKey = bk; this.cr.pixels(this.bar, null, drawBar(bm, this.fonts, this.music.bar)); }
+            }
+            if (this.bar && !!bm !== this.barShown) { this.barShown = !!bm; this.cr.set(this.bar, { visible: !!bm }); }
             // the music's backdrop: uploaded once per cover (bg: { px, n } the large cover, from c.music.bg)
             const bg = show && c && c.music && c.music.bg && this.shape !== 'off' ? c.music.bg : null;
             if (this.bg && bg && bg !== this.bgCover) { this.bgCover = bg; this.cr.pixels(this.bg, null, drawBackdrop(bg.px, bg.n, this.shape, this.look)); }
@@ -315,8 +352,9 @@ class Slot {
         this.place = Object.assign({}, DEF, place);
         if (fit) this.fit = Object.assign({ x: 0, y: 0, scale: 1 }, fit);
         if (this.ref) { try { const r = this.rect(); this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h }); } catch (e) { /* next */ } }
+        if (this.bar) { try { const k = this.barRect(); this.cr.set(this.bar, { x: k.x, y: k.y, w: k.w, h: k.h }); } catch (e) { /* next */ } }
         if (this.bg) { try { const b = this.bgRect(); this.cr.set(this.bg, { x: b.x, y: b.y, w: b.w, h: b.h }); } catch (e) { /* next */ } }
     }
 }
 
-module.exports = { Slot, SLOTS, SHAPE_NAMES, DEF, SW, SH, BW, BH, content, draw, drawBackdrop, gearText };
+module.exports = { Slot, SLOTS, SHAPE_NAMES, drawBar, DEF, SW, SH, BW, BH, content, draw, drawBackdrop, gearText };

@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.12.0';
+const VERSION = '1.13.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -144,7 +144,7 @@ mgu.run({
                 newCCMessage: guard('cc', (v) => {
                     if (!ccSeen) { ccSeen = true; return; }          // the value held at start is no new message
                     strip.hideFor(8000);
-                    write('BMW message: ETA hidden 8 s ' + json(v).slice(0, 300));
+                    note2('BMW message: ETA and second slot hidden 8 s ' + json(v).slice(0, 300));   // always logged (eta-tests.log)
                 }),
             }, log).then((sub) => write('subscribed cc: ' + (sub.available ? 'available' : 'not available') + (sub.error ? ' (' + sub.error + ')' : '')),
                 (e) => write('subscribe cc failed: ' + e.message));
@@ -204,7 +204,10 @@ mgu.run({
                 const t = kind === 'music' && np ? np.track() : null;
                 const cov = coverFor(t), c = SLOT.content(kind, car.data(), Date.now(), t, cov);
                 if (c && c.music && cov) c.music.bg = cov.big;
-                strip.slot.update(kind !== 'off' && strip.cfg.on, c);   // by itself, as BMW's own widget: not tied to the ETA or the map
+                const SIZE = { small: 110, medium: 140, large: 170, xl: 200 }, BAR = { short: 140, medium: 180, long: 240, full: 300 };
+                strip.slot.setMusic({ size: SIZE[ctx.settings.get('music_cover_size')] || 140, bar: BAR[ctx.settings.get('music_bar')] || 180 });
+                // a BMW message: the second slot fades out with the ETA and back after it, instead of blinking with the cluster's lock
+                strip.slot.update(kind !== 'off' && strip.cfg.on && Date.now() >= (strip.hideUntil || 0), c);   // by itself, as BMW's own widget: not tied to the ETA or the map
             }), 500);
             ui.onClick('BTN_TARGET', guard('target', () => {
                 strip.moving = !strip.moving ? 'slot' : strip.moving === 'slot' ? 'backdrop' : null;
