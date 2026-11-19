@@ -44,6 +44,39 @@ const STEP_ISLAND = { x: 30, y: 10 };      // on the map's picture
 
 function clamp(v, r) { return Math.max(r[0], Math.min(r[1], v)); }
 
+/** The picture at a quarter of its size, softened: the renderer stretches it back up (bilinear), so it reads as a blur. */
+function softQuarter(src, w, h) {
+    const qw = w / 4, qh = h / 4, q = Buffer.alloc(qw * qh * 4);
+    for (let y = 0; y < qh; y++) for (let x = 0; x < qw; x++) for (let c = 0; c < 4; c++) {
+        let sum = 0;
+        for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) sum += src[((y * 4 + dy) * w + x * 4 + dx) * 4 + c];
+        q[(y * qw + x) * 4 + c] = sum >> 4;
+    }
+    return blurRGBA(q, qw, qh, 2);
+}
+/** A soft copy of an RGBA picture (w x h): box blur of radius r, twice each way. */
+function blurRGBA(src, w, h, r) {
+    let a = Float32Array.from(src), b = new Float32Array(a.length);
+    const pass = (from, to, horiz) => {
+        const n = horiz ? w : h, m = horiz ? h : w;
+        for (let j = 0; j < m; j++) {
+            for (let c = 0; c < 4; c++) {
+                let sum = 0;
+                const at = (i) => (horiz ? (j * w + i) : (i * w + j)) * 4 + c;
+                for (let i = -r; i <= r; i++) sum += from[at(Math.max(0, Math.min(n - 1, i)))];
+                for (let i = 0; i < n; i++) {
+                    to[at(i)] = sum / (2 * r + 1);
+                    sum += from[at(Math.min(n - 1, i + r + 1))] - from[at(Math.max(0, i - r))];
+                }
+            }
+        }
+    };
+    for (let k = 0; k < 2; k++) { pass(a, b, true); pass(b, a, false); }
+    const out = Buffer.alloc(src.length);
+    for (let i = 0; i < out.length; i++) out[i] = Math.round(a[i]);
+    return out;
+}
+
 class Strip {
     /** ctx: the app's; note(line): writes to the app's logs. */
     constructor(ctx, note) {
@@ -115,6 +148,9 @@ class Strip {
             cr.on('error', (e) => { this.state.client = 'error: ' + (e && e.message || e); });
             const r = this.rect();
             this.ref = cr.image({ target: 'panel', klass: 'content', z: 20, x: r.x, y: r.y, w: r.w, h: r.h, iw: IW, ih: IH,
+                sampling: 'bilinear', fps: 2, visible: false });
+            // a blurred copy under it: the strip arrives and leaves blurred, squeezing and widening (springIn / springOut)
+            this.blurRef = cr.image({ target: 'panel', klass: 'content', z: 19, x: r.x, y: r.y, w: r.w, h: r.h, iw: IW / 4, ih: IH / 4,
                 sampling: 'bilinear', fps: 2, visible: false });
             this.island = new ISL.Island(cr, this.note);
             this.island.create(this.cfg.islandMap, IW, IH, 'map', this.style.look);
@@ -199,36 +235,47 @@ class Strip {
      */
     _springStop() {
         (this.springTimers || []).forEach(clearTimeout); this.springTimers = [];
-        (this.springAnims || []).forEach((a) => { try { this.cr.stop(this.ref, a); } catch (e) { /* */ } }); this.springAnims = [];
+        (this.springAnims || []).forEach((x) => { try { this.cr.stop(x[0], x[1]); } catch (e) { /* */ } }); this.springAnims = [];
         if (this.rise && this.cr.stop) { try { this.cr.stop(this.ref, this.rise); } catch (e) { /* */ } this.rise = null; }
     }
     _springAt(ms, fn) { this.springTimers.push(setTimeout(() => { try { fn(); } catch (e) { this.state.reason = 'spring: ' + e.message; } }, ms)); }
+    /** The same scale keys on the sharp and the blurred layer, so they move as one. */
+    _springAnim(property, ks) {
+        [this.ref, this.blurRef].forEach((ref) => { if (ref && this.cr.animate) this.springAnims.push([ref, this.cr.animate(ref, { property: property, keys: ks })]); });
+    }
+    _blurNow() { if (this.blurRef && this.pixels && this.blurOf !== this.pixels) { this.blurOf = this.pixels; this.cr.pixels(this.blurRef, null, softQuarter(this.pixels, IW, IH)); } }
+    _op(ms, sharp, blur) {
+        this._springAt(ms, () => {
+            if (sharp !== null) this.cr.set(this.ref, { opacity: sharp });
+            if (blur !== null && this.blurRef) this.cr.set(this.blurRef, { opacity: blur });
+        });
+    }
     springIn() {
         this._springStop();
         const E = ISL.ease, K = ISL.keys;
         try {
-            this.cr.set(this.ref, { opacity: 0 });
-            this.cr.set(this.ref, { visible: true });
-            if (this.cr.animate) {
-                this.springAnims.push(this.cr.animate(this.ref, { property: 'scale', keys: K(0, 520, 16, (t) => { const k = E.outBack(t); return [0.55 + 0.45 * k, 0.7 + 0.3 * k, 1]; }) }));
-                this.springAnims.push(this.cr.animate(this.ref, { property: 'translate', keys: K(0, 420, 10, (t) => [0, 18 * (1 - E.outCubic(t)), 0]) }));
-            }
-            [[40, 0.35], [90, 0.7], [140, 1]].forEach((x) => this._springAt(x[0], () => this.cr.set(this.ref, { opacity: x[1] })));
+            this._blurNow();
+            this.cr.set(this.ref, { opacity: 0, visible: true });
+            if (this.blurRef) this.cr.set(this.blurRef, { opacity: 0, visible: true });
+            // blurred and squeezed to 30 % wide, it widens past full with a spring and settles; then it sharpens
+            this._springAnim('scale', K(0, 560, 18, (t) => { const k = E.outBack(t); return [0.3 + 0.7 * k, 0.8 + 0.2 * k, 1]; }));
+            [[0, null, 0.5], [50, null, 1], [260, 0.35, null], [320, 0.75, null], [380, 1, 0.5], [440, null, 0]].forEach((x) => this._op(x[0], x[1], x[2]));
         } catch (e) { this.cr.set(this.ref, { visible: true, opacity: 1 }); }
     }
     springOut() {
         this._springStop();
         const E = ISL.ease, K = ISL.keys;
         try {
-            if (this.cr.animate) {
-                // a short pull-in (to 103 %), then down to 55 % wide and 70 % tall
-                this.springAnims.push(this.cr.animate(this.ref, { property: 'scale', keys: '0:1,1,1 70:1.03,1.03,1 ' +
-                    K(70, 330, 10, (t) => { const k = E.inCubic(t); return [1.03 - 0.48 * k, 1.03 - 0.33 * k, 1]; }).split(' ').slice(1).join(' ') }));
-                this.springAnims.push(this.cr.animate(this.ref, { property: 'translate', keys: K(90, 330, 8, (t) => [0, 16 * E.inCubic(t), 0], true) }));
-            }
-            [[150, 0.7], [220, 0.35], [290, 0]].forEach((x) => this._springAt(x[0], () => this.cr.set(this.ref, { opacity: x[1] })));
-            this._springAt(340, () => { this.cr.set(this.ref, { visible: false }); this._springStop(); this.cr.set(this.ref, { opacity: 1 }); });
-        } catch (e) { this.cr.set(this.ref, { visible: false }); }
+            this._blurNow();
+            if (this.blurRef) this.cr.set(this.blurRef, { opacity: 0, visible: true });
+            // the reverse: it blurs, widens a touch, squeezes to 30 % and fades
+            [[0, null, 1], [40, 0.6, null], [90, 0.2, null], [130, 0, null], [300, null, 0.6], [360, null, 0.25], [410, null, 0]].forEach((x) => this._op(x[0], x[1], x[2]));
+            this._springAnim('scale', '0:1,1,1 90:1.04,1.02,1 ' + K(90, 420, 12, (t) => { const k = E.inCubic(t); return [1.04 - 0.74 * k, 1.02 - 0.22 * k, 1]; }).split(' ').slice(1).join(' '));
+            this._springAt(450, () => {
+                this.cr.set(this.ref, { visible: false }); if (this.blurRef) this.cr.set(this.blurRef, { visible: false });
+                this._springStop(); this.cr.set(this.ref, { opacity: 1 });
+            });
+        } catch (e) { this.cr.set(this.ref, { visible: false }); if (this.blurRef) this.cr.set(this.blurRef, { visible: false }); }
     }
 
     /** The island preset: pops out of the camera on the schedule, shrinks back in between (island.js). */
@@ -300,6 +347,7 @@ class Strip {
         try {
             const r = this.rect();
             if (this.cr && this.ref) this.cr.set(this.ref, { x: r.x, y: r.y, w: r.w, h: r.h });
+            if (this.cr && this.blurRef) this.cr.set(this.blurRef, { x: r.x, y: r.y, w: r.w, h: r.h });
             if (this.island) this.island.move(this.cfg.islandMap);
             if (this.slot) this.slot.move(this.cfg.slot3, this.cfg.bgFit);
         } catch (e) { /* next */ }

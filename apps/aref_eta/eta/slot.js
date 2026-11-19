@@ -107,16 +107,31 @@ function draw(c, fonts) {
  * The progress bar and time left, a small picture of its own (BAR_W x BAR_H): it changes every second, the cover and
  * names only once a song, so the big picture isn't sent to the cluster each second (Nov 19: ~10 MB a minute).
  */
-const BAR_W = 380, BAR_H = 24;
-function barTop(n) { return 76 - Math.round((n - 140) / 2) + n + 92; }
-function drawBar(m, fonts, bw) {
+const BAR_W = 380, BAR_H = 56, BAR_Y = 36;           // the bar's line inside its picture (room above for the time)
+function barTop(n) { return 76 - Math.round((n - 140) / 2) + n + 92 + 9 - BAR_Y; }
+/**
+ * st: { w: length, h: thickness (3 thin .. 9 BMW's), time: 'right' | 'above' (BMW: over the bar's right end),
+ * back: a soft black plate behind the bar and the time, so they read over the cover's backdrop }.
+ */
+function drawBar(m, fonts, st) {
+    st = Object.assign({ w: 180, h: 3, time: 'right', back: false }, typeof st === 'number' ? { w: st } : st);
     const cv = new Canvas(BAR_W, BAR_H);
     cv.clear([0, 0, 0, 0]);
-    const f = Math.max(0, Math.min(1, m.pos / m.dur)), bx = Math.round((BAR_W - bw) / 2), by = 9;   // centred under the cover, as before
-    cv.roundRect(bx, by, bw, 3, 1.5, [255, 255, 255, 60]);
-    if (f > 0) cv.roundRect(bx, by, Math.max(3, bw * f), 3, 1.5, [255, 106, 0, 255]);
+    const M = { font: fonts.med, literal: true };
     const left = Math.max(0, Math.round((m.dur - m.pos) / 1000));
-    cv.text(Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + (left % 60), bx + bw + 10, by + 6, 18, GRAY, { font: fonts.med, literal: true });
+    const tt = Math.floor(left / 60) + ':' + (left % 60 < 10 ? '0' : '') + (left % 60), tw = cv.textWidth(tt, 20, M);
+    // the time to the right stays inside the picture: the bar gives way (still centred)
+    const f = Math.max(0, Math.min(1, m.pos / m.dur)), bw = Math.min(st.w, BAR_W - (st.time === 'right' ? 2 * (tw + 40) : 60));
+    const bx = Math.round((BAR_W - bw) / 2), th = st.h, by = BAR_Y - Math.floor(th / 2), r = th / 2;
+    if (st.back) {
+        // a soft black glow behind them (BMW's), no hard edge: many rounded rects, each smaller and a little darker
+        const x0 = bx - 4, x1 = (st.time === 'right' ? bx + bw + 12 + tw : bx + bw) + 4, y0 = st.time === 'above' ? BAR_Y - 24 : BAR_Y - 8, y1 = BAR_Y + 8;
+        for (let k = 10; k >= 0; k--) cv.roundRect(x0 - k * 2, y0 - k * 1.6, x1 - x0 + k * 4, y1 - y0 + k * 3.2, 10 + k * 2, [0, 0, 0, 16]);
+    }
+    cv.roundRect(bx, by, bw, th, r, [255, 255, 255, th > 4 ? 95 : 60]);
+    if (f > 0) cv.roundRect(bx, by, Math.max(th, bw * f), th, r, [255, 106, 0, 255]);
+    if (st.time === 'above') cv.text(tt, bx + bw, BAR_Y - 12, 20, WHITE, Object.assign({ align: 'right' }, M));
+    else cv.text(tt, bx + bw + 10, BAR_Y + 6, 18, GRAY, M);
     return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length);
 }
 
@@ -261,7 +276,7 @@ class Slot {
         this.fit = Object.assign({ x: 0, y: 0, scale: 1 }, fit);    // the backdrop's own nudge (Moving: backdrop)
         this.ref = null; this.key = null; this.shown = false; this.at = 0; this.pixels = null;
         this.bg = null; this.bgCover = null; this.bgShown = false; this.bar = null; this.barKey = null; this.barShown = false;
-        this.music = { size: 140, bar: 180 }; this.shape = 'bmw'; this.look = Object.assign({}, DEF_LOOK);
+        this.music = { size: 140, bar: 180, thick: 3, time: 'right', back: false }; this.shape = 'bmw'; this.look = Object.assign({}, DEF_LOOK);
     }
 
     /** Settings > backdrop softness, opacity and fade: redrawn at the next update. */
@@ -278,8 +293,8 @@ class Slot {
 
     /** Settings > cover size and bar length (px in the slot's picture). */
     setMusic(o) {
-        const m = Object.assign({ size: 140, bar: 180 }, o);
-        if (m.size !== this.music.size || m.bar !== this.music.bar) {
+        const m = Object.assign({ size: 140, bar: 180, thick: 3, time: 'right', back: false }, o);
+        if (JSON.stringify(m) !== JSON.stringify(this.music)) {
             this.music = m; this.key = null; this.barKey = null;
             if (this.bar) { try { const r = this.barRect(); this.cr.set(this.bar, { x: r.x, y: r.y, w: r.w, h: r.h }); } catch (e) { /* next */ } }
         }
@@ -336,8 +351,8 @@ class Slot {
             // the progress bar: its own small picture, at most once a second
             const bm = show && c && c.music && c.music.dur && c.music.pos !== null ? c.music : null;
             if (this.bar && bm) {
-                const bk = Math.floor(bm.pos / 1000) + '/' + bm.dur + '/' + this.music.bar;
-                if (bk !== this.barKey) { this.barKey = bk; this.cr.pixels(this.bar, null, drawBar(bm, this.fonts, this.music.bar)); }
+                const bk = Math.floor(bm.pos / 1000) + '/' + bm.dur + '/' + JSON.stringify(this.music);
+                if (bk !== this.barKey) { this.barKey = bk; this.cr.pixels(this.bar, null, drawBar(bm, this.fonts, { w: this.music.bar, h: this.music.thick, time: this.music.time, back: this.music.back })); }
             }
             if (this.bar && !!bm !== this.barShown) { this.barShown = !!bm; this.cr.set(this.bar, { visible: !!bm }); }
             // the music's backdrop: uploaded once per cover (bg: { px, n } the large cover, from c.music.bg)
