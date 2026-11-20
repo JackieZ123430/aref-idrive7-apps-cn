@@ -286,11 +286,11 @@ async function carLyrics() {
     await h.shot('MAIN', 'lyrics.png');
     // the other layouts and looks (Settings): big cover beside the lyrics, glass and classic; bigger lyrics
     later = 1000;
-    h.ctx.settings.set('layout', 'side');
+    h.ctx.settings.set('arrangement', 'side');
     await h.shot('MAIN', 'lyrics-side-glass.png');
     h.ctx.settings.set('style', 'classic');
     await h.shot('MAIN', 'lyrics-side-classic.png');
-    h.ctx.settings.set('layout', 'full'); h.ctx.settings.set('style', 'glass'); h.ctx.settings.set('lyrics_size', 'large');
+    h.ctx.settings.set('arrangement', 'full'); h.ctx.settings.set('style', 'glass'); h.ctx.settings.set('lyrics_size', 'large');
     await h.shot('MAIN', 'lyrics-large.png');
     h.ctx.settings.set('lyrics_size', 'medium');
     later = 0;

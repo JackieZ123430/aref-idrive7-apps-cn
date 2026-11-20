@@ -117,6 +117,7 @@ class Display {
         settings.onChange((k) => {
             if (k === 'layout' || k === 'renderer') this.closeSheet();
             if (k === 'layout') { this._place(); this.lastWords = null; }
+            if (k === 'hide_back_arrow') this.lastWords = null;
             if (k === 'theme') this.bgShown = null;
             if (k === 'renderer') this._mode();
         });
@@ -833,7 +834,10 @@ class Display {
         // mark the HMI draws above it when its bar is wider than the screen (eDrive's "Reset drive totals")
         c.clip(sx, 0, W - sx, HMI.status.h).clear(0).noclip();
         // of the column: the home button's strip and the back arrow (the rest shows the page's background)
-        if (hx > 0) { c.clip(0, 0, hx, FULL.headH - pl.y).clear(0).noclip(); c.clip(0, HMI.back.y - pl.y, hx, HMI.back.h).clear(0).noclip(); }
+        // (an app can hide the arrow: app.json screen "backArrow": false, or its setting "hide_back_arrow"; the spot still
+        // goes back when touched, and the controller's back does too)
+        const arrow = this.screen.backArrow !== false && !(this.settings && this.settings.get('hide_back_arrow'));
+        if (hx > 0) { c.clip(0, 0, hx, FULL.headH - pl.y).clear(0).noclip(); if (arrow) c.clip(0, HMI.back.y - pl.y, hx, HMI.back.h).clear(0).noclip(); }
         drawCredit(c, W - 18, FULL.headH + 17);
         r.xf(1, 0, 0);
         this._bleed(r, FULL.headH - pl.y, H);

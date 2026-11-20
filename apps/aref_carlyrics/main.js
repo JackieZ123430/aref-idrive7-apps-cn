@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.5.3';
+const VERSION = '0.5.4';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -183,8 +183,10 @@ mgu.run({
             if (ctx.onTab) ctx.onTab(guard('tab', (i) => { probe = i === 1; page = 0; vpage = 0; showButtons(); }));
 
             /** The layout in the safe area A: the cover centred in the left half, the lyrics in the right half. */
+            // 0.5.1-0.5.3 kept the arrangement in 'layout', which is the kit's (full screen or BMW's frame): moved over
+            try { if (settings.get('layout') === 'side') { settings.set('arrangement', 'side'); settings.set('layout', 'full'); log.info('settings: arrangement moved out of layout'); } } catch (e) { /* */ }
             const glassOn = () => settings.get('style') !== 'classic';
-            const sideOn = () => settings.get('layout') === 'side';      // a big cover, the lyrics beside it
+            const sideOn = () => settings.get('arrangement') === 'side';   // ('layout' is the kit's own: full screen or not)      // a big cover, the lyrics beside it
             /** iOS 26 Apple Music: a glass capsule with the cover and names top left, the lyrics full width under it,
              * a slim glass progress pill at the bottom, a round ⋯ glass button top right (Settings). */
             function geoGlass(A) {
