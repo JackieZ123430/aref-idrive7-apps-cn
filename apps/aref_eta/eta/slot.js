@@ -17,7 +17,7 @@
  */
 const { Canvas } = require('./kit/canvas');
 
-const SW = 420, SH = 360;                               // the picture
+const SW = 420, SH = 420;   // room around the cover and names for a soft patch's whole fade                               // the picture
 // its centre on the cluster: where BMW's own widget sits (its icon and "No active entertainment source", measured
 // from Aref's Nov 16 photo: centre x ~1420, y ~292, about 365 x 250 cluster px)
 const DEF = { x: 1465, y: 340, scale: 1 };           // (Nov 16: moved toward the gauge's middle, Aref's photo)
@@ -64,6 +64,27 @@ function content(kind, d, now, track, cover) {
     return null;
 }
 
+/**
+ * A soft dark patch with no edge: black whose alpha falls off smoothly ((1 - d)^2.2) with the distance outside the
+ * rect x0..x1, y0..y1, reaching ~0 at `feather` px; maxA at its middle. Kept inside the picture (feather shrinks to fit).
+ */
+function softPatch(cv, x0, y0, x1, y1, feather, maxA) {
+    const room = Math.min(x0, y0, cv.w - x1, cv.h - y1);
+    const f = Math.max(8, Math.min(feather, room));
+    const ax = Math.max(0, Math.floor(x0 - f)), bx = Math.min(cv.w, Math.ceil(x1 + f)), ay = Math.max(0, Math.floor(y0 - f)), by = Math.min(cv.h, Math.ceil(y1 + f));
+    const BLACK = [0, 0, 0, 255];
+    for (let y = ay; y < by; y++) {
+        const dy = y < y0 ? y0 - y : y > y1 ? y - y1 : 0;
+        for (let x = ax; x < bx; x++) {
+            const dx = x < x0 ? x0 - x : x > x1 ? x - x1 : 0;
+            const d = Math.sqrt(dx * dx + dy * dy) / f;
+            if (d >= 1) continue;
+            const a = maxA * Math.pow(1 - d, 2.2);                           // a long, gentle fade to exactly 0 at the edge
+            if (a > 0.004) cv._blend(x, y, BLACK, a);
+        }
+    }
+}
+
 function draw(c, fonts) {
     const cv = new Canvas(SW, SH);
     cv.clear([0, 0, 0, 0]);
@@ -82,12 +103,12 @@ function draw(c, fonts) {
         if (cols === 2) cv.fillRect(SW / 2, 78, 1, 110, DIM);
     } else if (c && c.music) {
         // as BMW's own widget: the picture on top, centred, the title and the artist under it
-        const m = c.music, n = m.size || 140, x0 = (SW - n) / 2, y0 = 76 - Math.round((n - 140) / 2);   // grows from its middle
+        const m = c.music, n = m.size || 140, x0 = (SW - n) / 2, y0 = 106 - Math.round((n - 140) / 2);   // grows from its middle
         if (m.back) {
-            // Settings > soft black behind the cover and names (BMW's widget has one): no edge, just a darker patch
+            // Settings > soft black behind the cover and names (BMW's widget has one): darkest in the middle, fading out
+            // over ~70 px with no edge
             const tw = Math.min(SW - 60, Math.max(n, cv.textWidth(fit(m.title, 30, SW - 20, B), 30, B), cv.textWidth(fit(m.artist, 24, SW - 20, M), 24, M)));
-            const bx0 = SW / 2 - tw / 2 - 6, bx1 = SW / 2 + tw / 2 + 6, by0 = y0 - 6, by1 = y0 + n + 86;
-            for (let k = 14; k >= 0; k--) cv.roundRect(bx0 - k * 2, by0 - k * 2, bx1 - bx0 + k * 4, by1 - by0 + k * 4, 18 + k * 2, [0, 0, 0, 8]);
+            softPatch(cv, SW / 2 - tw / 2 + 10, y0 + 14, SW / 2 + tw / 2 - 10, y0 + n + 66, 104, 0.62);
         }
         if (m.cover && m.cover.px) {
             // the cover, scaled into n x n with rounded corners (nearest from the square it came as)
@@ -113,8 +134,8 @@ function draw(c, fonts) {
  * The progress bar and time left, a small picture of its own (BAR_W x BAR_H): it changes every second, the cover and
  * names only once a song, so the big picture isn't sent to the cluster each second (Nov 19: ~10 MB a minute).
  */
-const BAR_W = 380, BAR_H = 90, BAR_Y = 52;           // the bar's line inside its picture (room above for the time)
-function barTop(n) { return 76 - Math.round((n - 140) / 2) + n + 92 + 9 - BAR_Y; }
+const BAR_W = 380, BAR_H = 150, BAR_Y = 85;           // the bar's line inside its picture (room above for the time)
+function barTop(n) { return 106 - Math.round((n - 140) / 2) + n + 92 + 9 - BAR_Y; }
 /**
  * st: { w: length, h: thickness (3 thin .. 9 BMW's), time: 'right' | 'above' (BMW: over the bar's right end),
  * back: a soft black plate behind the bar and the time, so they read over the cover's backdrop }.
@@ -130,10 +151,9 @@ function drawBar(m, fonts, st) {
     const f = Math.max(0, Math.min(1, m.pos / m.dur)), bw = Math.min(st.w, BAR_W - (st.time === 'right' ? 2 * (tw + 40) : 60));
     const bx = Math.round((BAR_W - bw) / 2), th = st.h, by = BAR_Y - Math.floor(th / 2), r = th / 2;
     if (st.back) {
-        // a soft black glow behind them (BMW's), no hard edge: many rounded rects, each smaller and a little darker
-        const x0 = bx - 4, x1 = (st.time === 'right' ? bx + bw + 12 + tw : bx + bw) + 4, y0 = st.time === 'above' ? BAR_Y - 24 : BAR_Y - 8, y1 = BAR_Y + 8;
-        // (Nov 20: softer: fainter steps spread wider, so the edge fades out over ~30 px)
-        for (let k = 14; k >= 0; k--) cv.roundRect(x0 - k * 2.2, y0 - k * 1.3, x1 - x0 + k * 4.4, y1 - y0 + k * 2.6, 12 + k * 2.2, [0, 0, 0, 8]);
+        // a soft black glow behind them (BMW's): darkest along the bar, fading out over ~40 px with no edge
+        const x0 = bx + 10, x1 = (st.time === 'right' ? bx + bw + 12 + tw : bx + bw) - 10, y0 = st.time === 'above' ? BAR_Y - 18 : BAR_Y - 2, y1 = BAR_Y + 2;
+        softPatch(cv, x0, y0, x1, y1, 62, 0.55);
     }
     cv.roundRect(bx, by, bw, th, r, [255, 255, 255, th > 4 ? 95 : 60]);
     if (f > 0) cv.roundRect(bx, by, Math.max(th, bw * f), th, r, [255, 106, 0, 255]);
