@@ -225,7 +225,7 @@ function dist0(s, u, v) {
  * look: { top, bottom, left, right: each side's fade width in box units, opacity 0..1 }: a side over a gauge can
  * fade out instead of moving the whole backdrop.
  */
-const DEF_LOOK = { top: 0.05, bottom: 0.25, left: 0.05, right: 0.05, opacity: 1 };
+const DEF_LOOK = { top: 0.05, bottom: 0.25, left: 0.05, right: 0.05, opacity: 1, blur: 0 };
 /**
  * The shape's alpha (0..255 per backdrop pixel), made once per shape and look, not per song. Each side has its
  * own edge: look.top / bottom / left / right are fade widths in box units (0.015 sharp .. 0.45 a long gradient).
@@ -251,7 +251,7 @@ const widthFor = (nx, ny, L) => {
     return (r * r * L.right + l * l * L.left + b * b * L.bottom + t * t * L.top) / Math.max(1e-6, r * r + l * l + b * b + t * t);
 };
 function backdropMask(shape, L) {
-    const key = shape + JSON.stringify(L);
+    const key = shape + JSON.stringify(Object.assign({}, L, { blur: 0 }));   // the mask doesn't depend on the blur
     if (key === maskKey) return maskA;
     const A = new Uint8Array(BW * BH);
     const s0 = SHAPES[shape] || SHAPES.bmw, safe = s0 !== SHAPES.bmw;
@@ -282,8 +282,32 @@ function backdropMask(shape, L) {
     return A;
 }
 
+/** The cover softened: a box blur of radius r (px of its n x n), three passes each way (close to a gaussian). */
+function blurCover(px, n, r) {
+    if (!(r > 0)) return px;
+    let a = new Float32Array(n * n * 3), b = new Float32Array(n * n * 3);
+    for (let i = 0, j = 0; i < n * n; i++, j += 3) { a[j] = px[i * 4]; a[j + 1] = px[i * 4 + 1]; a[j + 2] = px[i * 4 + 2]; }
+    const pass = (src, dst, horiz) => {
+        for (let l = 0; l < n; l++) for (let c = 0; c < 3; c++) {
+            const at = (i) => ((horiz ? l * n + i : i * n + l) * 3) + c;
+            let sum = 0;
+            for (let i = -r; i <= r; i++) sum += src[at(Math.max(0, Math.min(n - 1, i)))];
+            for (let i = 0; i < n; i++) {
+                dst[at(i)] = sum / (2 * r + 1);
+                sum += src[at(Math.min(n - 1, i + r + 1))] - src[at(Math.max(0, i - r))];
+            }
+        }
+    };
+    for (let k = 0; k < 3; k++) { pass(a, b, true); pass(b, a, false); }
+    const out = Buffer.alloc(n * n * 4);
+    for (let i = 0, j = 0; i < n * n; i++, j += 3) { out[i * 4] = a[j]; out[i * 4 + 1] = a[j + 1]; out[i * 4 + 2] = a[j + 2]; out[i * 4 + 3] = 255; }
+    return out;
+}
+
 function drawBackdrop(px, n, shape, look) {
     const A = backdropMask(shape, Object.assign({}, DEF_LOOK, look));
+    // Settings > Music backdrop blur (BMW's art behind its widget is soft, not a second sharp copy of the cover)
+    px = blurCover(px, n, Math.round(((look && look.blur) || 0) * n / 300));
     const out = Buffer.alloc(BW * BH * 4);
     for (let y = 0; y < BH; y++) {
         const sy = Math.floor(y * n / BH) * n;
