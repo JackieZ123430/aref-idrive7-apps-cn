@@ -85,6 +85,24 @@ function softPatch(cv, x0, y0, x1, y1, feather, maxA) {
     }
 }
 
+/**
+ * A soft dark glow with no shape to it: black, darkest at (cx, cy), fading out over an oval rx x ry ((1 - r)^2 with r
+ * the oval distance), so it reads as shade behind the cover and names, not a box (Nov 20: the box read as a column).
+ */
+function softGlow(cv, cx, cy, rx, ry, maxA) {
+    const BLACK = [0, 0, 0, 255];
+    const ax = Math.max(0, Math.floor(cx - rx)), bx = Math.min(cv.w, Math.ceil(cx + rx)), ay = Math.max(0, Math.floor(cy - ry)), by = Math.min(cv.h, Math.ceil(cy + ry));
+    for (let y = ay; y < by; y++) {
+        const dy = (y + 0.5 - cy) / ry;
+        for (let x = ax; x < bx; x++) {
+            const dx = (x + 0.5 - cx) / rx, r = Math.sqrt(dx * dx + dy * dy);
+            if (r >= 1) continue;
+            const t = 1 - r, a = maxA * t * t * (3 - 2 * t);           // smooth at the middle and at the rim
+            if (a > 0.004) cv._blend(x, y, BLACK, a);
+        }
+    }
+}
+
 function draw(c, fonts) {
     const cv = new Canvas(SW, SH);
     cv.clear([0, 0, 0, 0]);
@@ -105,10 +123,10 @@ function draw(c, fonts) {
         // as BMW's own widget: the picture on top, centred, the title and the artist under it
         const m = c.music, n = m.size || 140, x0 = (SW - n) / 2, y0 = 106 - Math.round((n - 140) / 2);   // grows from its middle
         if (m.back) {
-            // Settings > soft black behind the cover and names (BMW's widget has one): darkest in the middle, fading out
-            // over ~70 px with no edge
-            const tw = Math.min(SW - 60, Math.max(n, cv.textWidth(fit(m.title, 30, SW - 20, B), 30, B), cv.textWidth(fit(m.artist, 24, SW - 20, M), 24, M)));
-            softPatch(cv, SW / 2 - tw / 2 + 10, y0 + 14, SW / 2 + tw / 2 - 10, y0 + n + 66, 104, 0.62);
+            // Settings > soft black behind the cover and names: an oval shade centred on them, fading out every way,
+            // kept inside the picture so no side is cut
+            const cy = y0 + (n + 80) / 2, ry = Math.min((n + 80) / 2 + 70, cy, SH - cy), rx = Math.min(SW / 2, ry * 1.25);
+            softGlow(cv, SW / 2, cy, rx, ry, 0.66);
         }
         if (m.cover && m.cover.px) {
             // the cover, scaled into n x n with rounded corners (nearest from the square it came as)
