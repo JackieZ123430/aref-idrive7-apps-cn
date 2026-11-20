@@ -93,9 +93,10 @@ function leftText(sec) {
  * Apple's own colour wins whenever the car does send one.
  */
 const WINDOW_MS = 8 * 60000;
+const HOLD_MS = 45000;          // a colour change must last this long before it shows
 class TrafficGuess {
     constructor() { this.reset(); }
-    reset() { this.hist = []; this.start = null; this.last = null; }
+    reset() { this.hist = []; this.start = null; this.last = null; this.shown = undefined; }
     apply(r, now) {
         if (!r || !r.travelSec) return r;
         const arr = now + r.travelSec * 1000;
@@ -112,8 +113,18 @@ class TrafficGuess {
             if (mins > free) paceMin = (mins - free) / mins >= 0.25 ? mins - free : 0;
             if (paceMin && (mins - free) / mins < 0.35 && paceMin >= 10) paceMin = 9.9;   // red needs both 10 min and 35 %
         }
+        // slip only counts on trips it can tell: 3 mi or more and 10 min or more left (on a short city trip a few red
+        // lights are minutes, and Apple sends whole minutes); and only when it's a real share of the time left
+        const mins = r.travelSec / 60;
+        const slipOk = mi !== null && mi >= 3 && mins >= 10;
+        const slipLvl = !slipOk ? 0 : slipMin >= 8 && slipMin >= 0.4 * mins ? 2 : slipMin >= 4 && slipMin >= 0.25 * mins ? 1 : 0;
         const lvl = (x, y, z) => (x >= y ? 2 : x >= z ? 1 : 0);
-        const level = Math.max(lvl(slipMin, 8, 3), lvl(paceMin, 10, 4));
+        let level = Math.max(slipLvl, lvl(paceMin, 10, 4));
+        // no flicker: a new colour must hold 45 s before it shows
+        if (this.shown === undefined) { this.shown = level; this.cand = level; this.candAt = now; }
+        if (level !== this.cand) { this.cand = level; this.candAt = now; }
+        if (this.cand !== this.shown && now - this.candAt >= HOLD_MS) this.shown = this.cand;
+        level = this.shown;
         this.last = { slipMin: Math.round(slipMin * 10) / 10, paceMin: Math.round(paceMin * 10) / 10, level: level };
         if (!r.traffic) r = Object.assign({}, r, { traffic: ['green', 'yellow', 'red'][level], guessed: true });
         return r;
