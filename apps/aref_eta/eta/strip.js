@@ -26,6 +26,7 @@ const pack = require('./kit/pack');
 
 const LOOK = require('./look');
 const ISL = require('./island');
+const DESIGN = require('./design');
 const SLOT = require('./slot');
 const IW = LOOK.IW, IH = LOOK.IH;         // the image; the rect on the cluster scales it (bilinear)
 const PREVIEW_MS = 30000;
@@ -156,6 +157,8 @@ class Strip {
             this.island.create(this.cfg.islandMap, IW, IH, 'map', this.style.look);
             this.slot = new SLOT.Slot(cr, this.fonts, this.note, this.cfg.slot3, this.cfg.bgFit);
             this.slot.create();
+            this.design = new DESIGN.Design(cr, this.ctx.dataDir, this.note);     // Cluster Studio's whole-cluster picture, under all of it
+            this.design.create();
             cr.connect();
         } catch (e) {
             this.state.client = 'failed: ' + e.message;
