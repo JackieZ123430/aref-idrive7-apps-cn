@@ -42,7 +42,8 @@
       ],
       "requires": {
         "idrive7-renderd": "2.1.7",
-        "mgu-inputgate": "1.0.0"
+        "mgu-inputgate": "1.0.0",
+        "mgu-uplink": "0.7.3"
       },
       "icon": "icon.png",
       "build": {
@@ -101,7 +102,8 @@
       "requires": {
         "idrive7-renderd": "2.1.7",
         "mgu-inputgate": "1.0.0",
-        "cluster-render": "0.4.2"
+        "cluster-render": "0.4.2",
+        "mgu-uplink": "0.7.3"
       },
       "icon": "icon.png",
       "build": {
