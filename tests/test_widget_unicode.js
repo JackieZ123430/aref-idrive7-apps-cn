@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert');
 const root=path.resolve(__dirname,'..');
-const families=["arefahmad--idrive7-apps"];
+const families=['arefahmad--idrive7-apps'];
 function load(file,requireFn){const context={module:{exports:{}},require:requireFn,Promise,Map,Set};vm.runInNewContext(fs.readFileSync(file,'utf8'),context,{filename:file});return context.module.exports;}
 async function test(folder,language){
     const runtime=path.join(root,'kit/runtime');
@@ -32,6 +32,14 @@ async function test(folder,language){
         const state=hw.localized({label:'Car Care',value:'Set up',small:['Car Care','Record your last services']});
         assert.equal(state.label,language==='en'?'Car Care':'车辆养护');
         assert.equal(state.small[0],state.label);
+        const service=load(path.join(runtime,'service-text.js'),name=>{assert.equal(name,'./i18n');return i18n;});
+        assert.equal(service.serviceIntervalText('3000 mi left'),language==='en'?'3000 mi left':'剩余 3000 mi');
+        assert.equal(service.serviceIntervalText('left'),language==='en'?'left':'剩余');
+        assert.equal(service.serviceIntervalText('100 mi over'),language==='en'?'100 mi over':'已超期 100 mi');
+        assert.equal(i18n.t('left'),language==='en'?'left':'左侧','direction is not redefined by service formatting');
+        assert.equal(i18n.t('2 misfires'),language==='en'?'2 misfires':'2 次失火');
+        assert.equal(i18n.t('No misfires'),language==='en'?'No misfires':'未检测到失火');
+        assert.equal(i18n.t('Start a route on CarPlay'),language==='en'?'Start a route on CarPlay':'请在 CarPlay 中开始导航');
     }
 }
 (async()=>{for(const family of families)for(const language of ['en','zh-CN'])await test(family,language);console.log('PASS widget runtime x 2 languages: Unicode handles, independent spawns, literal music metadata, numeric values, big/small translation');})().catch(error=>{console.error(error);process.exitCode=1;});
