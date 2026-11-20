@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.5.2';
+const VERSION = '0.5.3';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -242,6 +242,24 @@ mgu.run({
             }
 
             /** The blurred artwork behind everything (or the song's colours), drifting slowly while it plays. */
+            /**
+             * Where the kit runs the screen, the HMI's own picture under it is one plain colour (the theme's bg), and
+             * BMW's side bar (the < column) shows it under a light overlay of its own (~13.5 % white, measured on the
+             * car's screen 2026-11-20). So the bg sent is the page's edge colour with that overlay taken back out: the
+             * column then matches the page, song by song.
+             */
+            const THEMES = require('./kit/themes');
+            let hmiBgShown = null;
+            function hmiBg(a, P) {
+                const c = edgeColour(a, P);
+                if (c === hmiBgShown) return;
+                hmiBgShown = c;
+                const OV = 0.135, n = (i) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16);
+                const v = [0, 1, 2].map((i) => Math.max(0, Math.min(255, Math.round((n(i) - 255 * OV) / (1 - OV)))));
+                const bg = '#' + v.map((x) => ('0' + x.toString(16)).slice(-2)).join('');
+                if (ctx.setTheme) ctx.setTheme(() => Object.assign({}, THEMES.theme(settings.get('theme')), { bg: bg }));
+            }
+
             /** The backdrop's colour at its left edge (the blurred cover's left 8 %, dimmed as the glass dims it), as #rrggbb. */
             const edgeCache = { ver: -1, c: null };
             function edgeColour(a, P) {
@@ -299,9 +317,9 @@ mgu.run({
                 cv.text(fit(cv, by, 22, s, M), x, ty, 22, G.withAlpha(WHITE, 0.62), M);
                 // the progress line, and the times under it
                 const py = ty + 28, pos = Math.max(0, position(now) - offset()), dur = cur.duration || 0;
-                if (glassOn()) glassRect(cv, x - 14, py - 14, s + 28, 54, 20);   // the bar and its times in one glass pill
-                cv.roundRect(x, py, s, 6, 3, G.withAlpha(WHITE, 0.2));
-                if (dur) cv.roundRect(x, py, Math.max(6, Math.min(1, pos / dur) * s), 6, 3, G.withAlpha(WHITE, 0.85));
+                // Apple Music's: a rounded bar a little thicker than a line, the played part white, the times under its ends
+                cv.roundRect(x, py, s, 7, 3.5, G.withAlpha(WHITE, 0.22));
+                if (dur) cv.roundRect(x, py, Math.max(7, Math.min(1, pos / dur) * s), 7, 3.5, G.withAlpha(WHITE, 0.92));
                 cv.text(mmss(pos), x, py + 30, 16, G.withAlpha(WHITE, 0.55), M);
                 if (dur) cv.text('-' + mmss(dur - pos), x + s, py + 30, 16, G.withAlpha(WHITE, 0.55), Object.assign({ align: 'right' }, M));
                 const state = !cur.playing ? 'Paused' : !clk ? 'Timed from the song change' : '';
@@ -432,7 +450,7 @@ mgu.run({
                 } else {
                     LYR.size = LYR_SIZES[settings.get('lyrics_size')] || 50; LYR.lh = Math.round(LYR.size * 1.2); LYR.gap = Math.round(LYR.size * 0.48);
                     const P = nameColours(cur.title + cur.artist), a = artFor(), Q = sideOn() ? geo(A) : geoGlass(A);
-                    backdrop(cv, a, now, P, fullH); sideBand(a, P);
+                    backdrop(cv, a, now, P, fullH); sideBand(a, P); hmiBg(a, P);
                     if (Q.glass) glassChrome(cv, Q, a, P, now); else { coverColumn(cv, Q, a, P, now); moreButton(cv, A); }
                     const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
                     if (lyr.state === 'synced' && lyr.lines.length) drawSynced(cv, Q, lyr.lines, now);
