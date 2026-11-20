@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.4.2';
+const VERSION = '0.4.3';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -190,6 +190,22 @@ mgu.run({
             }
 
             /** The blurred artwork behind everything (or the song's colours), drifting slowly while it plays. */
+            /** The backdrop's colour at its left edge (the blurred cover's left 8 %, dimmed as the glass dims it), as #rrggbb. */
+            const edgeCache = { ver: -1, c: null };
+            function edgeColour(a, P) {
+                const hex = (r, g, b) => '#' + [r, g, b].map((v) => ('0' + Math.max(0, Math.min(255, Math.round(v))).toString(16)).slice(-2)).join('');
+                if (!a || !a.blur) {
+                    const t = String(P.top || '#202020'), b = String(P.bottom || '#101010'), n = (h, i) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16) || 0;
+                    return hex((n(t, 0) + n(b, 0)) / 2 * 0.85, (n(t, 1) + n(b, 1)) / 2 * 0.85, (n(t, 2) + n(b, 2)) / 2 * 0.85);
+                }
+                if (edgeCache.ver === a.ver && edgeCache.c) return edgeCache.c;
+                const bw = ART.BG_W, bh = ART.BG_H, cols = Math.max(2, Math.round(bw * 0.08));
+                let r = 0, g = 0, b = 0, k = 0;
+                for (let y = 0; y < bh; y++) for (let x = 0; x < cols; x++) { const i = (y * bw + x) * 4; r += a.blur[i]; g += a.blur[i + 1]; b += a.blur[i + 2]; k++; }
+                edgeCache.ver = a.ver; edgeCache.c = hex(r / k * 0.82, g / k * 0.82, b / k * 0.82);
+                return edgeCache.c;
+            }
+
             function backdrop(cv, a, now, P, fullH) {
                 if (a) {
                     // two blurred layers of the cover drifting past each other, slowly, as Apple Music's background flows
@@ -342,18 +358,26 @@ mgu.run({
                 // in the HMI's own frame BMW draws its side-panel tab (<) over the left edge: content starts right of
                 // it, and the edge is shaded so the tab sits on a band of its own (Nov 18 photo)
                 const SIDE = A0.own ? 0 : 72, A = Object.assign({}, A0, { x: A0.x + SIDE, w: A0.w - SIDE });
-                const sideBand = () => { for (let i = 0; i < SIDE; i += 4) cv.fillRect(i, 0, 4, fullH, G.withAlpha('#000000', 0.5 * (1 - i / SIDE))); };
+                // BMW's back column (the left 84 screen px, under its < tab) shows the HMI's own copy of this picture, drawn
+                // without the blur and the dimming, so it came out lighter than the page (Nov 20 photo). Opaque fills draw
+                // the same in both: the column gets the backdrop's own left-edge colour, solid, blending into the page
+                const sideBand = (a, P) => {
+                    if (!SIDE) return;
+                    const c = edgeColour(a, P), w = 84, fade = 90;
+                    cv.fillRect(0, 0, w, fullH, c);
+                    for (let i = 0; i < fade; i += 3) cv.fillRect(w + i, 0, 3, fullH, G.withAlpha(c, 1 - (i + 1.5) / fade));
+                };
                 if (cv.chrome) G.frame(cv, ctx.theme(), ['Lyrics', 'Probe'], 0, []);
                 if (!cur) follow();
                 if (!cur) {
                     const P = nameColours('Car Lyrics');
-                    backdrop(cv, null, now, P, fullH); sideBand();
+                    backdrop(cv, null, now, P, fullH); sideBand(null, P);
                     const cy = A.y + A.h / 2;
                     cv.text('Play a song on your phone', A.x + A.w / 2, cy - 6, 40, WHITE, { font: F_BOLD, align: 'center', literal: true });
                     cv.text('Apple Music over CarPlay, or any app over Bluetooth. The lyrics show up here.', A.x + A.w / 2, cy + 40, 22, G.withAlpha(WHITE, 0.62), { align: 'center', font: F_MED, literal: true });
                 } else {
                     const P = nameColours(cur.title + cur.artist), a = artFor(), Q = geo(A);
-                    backdrop(cv, a, now, P, fullH); sideBand();
+                    backdrop(cv, a, now, P, fullH); sideBand(a, P);
                     coverColumn(cv, Q, a, P, now);
                     const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
                     if (lyr.state === 'synced' && lyr.lines.length) drawSynced(cv, Q, lyr.lines, now);
@@ -480,7 +504,7 @@ mgu.run({
             let idleTimer = null;
             const goIdle = guard('idle', () => {
                 idleTimer = null;
-                if (idle || ui.isVisible('MAIN')) return;
+                if (idle || (ui.isVisible && ui.isVisible('MAIN'))) return;
                 idle = true;
                 np.pause(); cur = null; clk = null;
                 if (artwork.cache) artwork.cache.clear();
@@ -488,7 +512,7 @@ mgu.run({
                 if (typeof global.gc === 'function') { try { global.gc(); } catch (e) { /* */ } }
                 log.info('idle: off screen, subscriptions closed');
             });
-            ui.onVisible(guard('visible', (name, v) => {
+            if (ui.onVisible) ui.onVisible(guard('visible', (name, v) => {
                 if (name !== 'MAIN') return;
                 if (!v) { if (!idleTimer && !idle) idleTimer = setTimeout(goIdle, IDLE_MS); return; }
                 if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
@@ -497,7 +521,7 @@ mgu.run({
                     np.start().then(() => log.info('awake: subscribed again'), (e) => log.error('nowplaying restart: ' + (e && e.message)));
                 }
             }));
-            if (!ui.isVisible('MAIN')) idleTimer = setTimeout(goIdle, IDLE_MS);
+            if (ui.isVisible && !ui.isVisible('MAIN')) idleTimer = setTimeout(goIdle, IDLE_MS);
             log.info('started ' + VERSION);
         } catch (e) {
             log.error('start: ' + (e && e.stack || e));
