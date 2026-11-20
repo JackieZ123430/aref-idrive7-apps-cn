@@ -126,6 +126,12 @@ function draw(c, fonts) {
         const C = { align: 'center' };
         cv.text(fit(m.title, 30, SW - 20, B), SW / 2, y0 + n + 42, 30, WHITE, Object.assign({}, B, C));
         cv.text(fit(m.artist, 24, SW - 20, M), SW / 2, y0 + n + 76, 24, GRAY, Object.assign({}, M, { align: 'center' }));
+        if (m.barBack && m.dur) {
+            // Settings > soft black behind the bar: the bar's own picture (barRect) lies over this, its line at ly
+            const ly = barTop(n) + BAR_Y, bw = m.barW || 180, bx = Math.round((SW - bw) / 2);
+            const x0 = bx + 10, x1 = (m.barTime === 'right' ? bx + bw + 60 : bx + bw) - 10, yy0 = m.barTime === 'above' ? ly - 18 : ly - 2;
+            softPatch(cv, x0, yy0, x1, ly + 2, 62, 0.55);
+        }
     }
     return Buffer.from(cv.d.buffer, cv.d.byteOffset, cv.d.length);
 }
@@ -134,7 +140,7 @@ function draw(c, fonts) {
  * The progress bar and time left, a small picture of its own (BAR_W x BAR_H): it changes every second, the cover and
  * names only once a song, so the big picture isn't sent to the cluster each second (Nov 19: ~10 MB a minute).
  */
-const BAR_W = 380, BAR_H = 150, BAR_Y = 85;           // the bar's line inside its picture (room above for the time)
+const BAR_W = 380, BAR_H = 44, BAR_Y = 30;           // the bar's line inside its picture (room above for the time)
 function barTop(n) { return 106 - Math.round((n - 140) / 2) + n + 92 + 9 - BAR_Y; }
 /**
  * st: { w: length, h: thickness (3 thin .. 9 BMW's), time: 'right' | 'above' (BMW: over the bar's right end),
@@ -150,11 +156,7 @@ function drawBar(m, fonts, st) {
     // the time to the right stays inside the picture: the bar gives way (still centred)
     const f = Math.max(0, Math.min(1, m.pos / m.dur)), bw = Math.min(st.w, BAR_W - (st.time === 'right' ? 2 * (tw + 40) : 60));
     const bx = Math.round((BAR_W - bw) / 2), th = st.h, by = BAR_Y - Math.floor(th / 2), r = th / 2;
-    if (st.back) {
-        // a soft black glow behind them (BMW's): darkest along the bar, fading out over ~40 px with no edge
-        const x0 = bx + 10, x1 = (st.time === 'right' ? bx + bw + 12 + tw : bx + bw) - 10, y0 = st.time === 'above' ? BAR_Y - 18 : BAR_Y - 2, y1 = BAR_Y + 2;
-        softPatch(cv, x0, y0, x1, y1, 62, 0.55);
-    }
+    // the soft black behind the bar is in the song's picture (draw(): sent once a song, not every second)
     cv.roundRect(bx, by, bw, th, r, [255, 255, 255, th > 4 ? 95 : 60]);
     if (f > 0) cv.roundRect(bx, by, Math.max(th, bw * f), th, r, [255, 106, 0, 255]);
     if (st.time === 'above') cv.text(tt, bx + bw, BAR_Y - 12, 20, WHITE, Object.assign({ align: 'right' }, M));
@@ -365,7 +367,7 @@ class Slot {
         try {
             const show = !!(want && c);
             if (show) {
-                if (c.music) { c.music.size = this.music.size; c.music.back = !!this.music.textBack; }
+                if (c.music) { c.music.size = this.music.size; c.music.back = !!this.music.textBack; c.music.barBack = !!this.music.back; c.music.barW = this.music.bar; c.music.barTime = this.music.time; }
                 const key = JSON.stringify(c, (k, v) => (k === 'cover' || k === 'bg' ? (v ? k : null) : k === 'pos' ? undefined : v));
                 const now = Date.now();
                 if (key !== this.key && now - this.at >= MIN_MS) {
@@ -379,7 +381,7 @@ class Slot {
             const bm = show && c && c.music && c.music.dur && c.music.pos !== null ? c.music : null;
             if (this.bar && bm) {
                 const bk = Math.floor(bm.pos / 1000) + '/' + bm.dur + '/' + JSON.stringify(this.music);
-                if (bk !== this.barKey) { this.barKey = bk; this.cr.pixels(this.bar, null, drawBar(bm, this.fonts, { w: this.music.bar, h: this.music.thick, time: this.music.time, back: this.music.back })); }
+                if (bk !== this.barKey) { this.barKey = bk; this.cr.pixels(this.bar, null, drawBar(bm, this.fonts, { w: this.music.bar, h: this.music.thick, time: this.music.time })); }
             }
             if (this.bar && !!bm !== this.barShown) { this.barShown = !!bm; this.cr.set(this.bar, { visible: !!bm }); }
             // the music's backdrop: uploaded once per cover (bg: { px, n } the large cover, from c.music.bg)
