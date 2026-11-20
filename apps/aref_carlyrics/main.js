@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.4.3';
+const VERSION = '0.5.0';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -181,6 +181,50 @@ mgu.run({
             if (ctx.onTab) ctx.onTab(guard('tab', (i) => { probe = i === 1; page = 0; vpage = 0; showButtons(); }));
 
             /** The layout in the safe area A: the cover centred in the left half, the lyrics in the right half. */
+            const glassOn = () => settings.get('style') !== 'classic';
+            /** iOS 26 Apple Music: a glass capsule with the cover and names top left, the lyrics full width under it,
+             * a slim glass progress pill at the bottom, a round ⋯ glass button top right (Settings). */
+            function geoGlass(A) {
+                const top = A.y + 120, bottom = A.bottom - 64;
+                return { A: A, glass: true, LX: A.x + 48, LW: A.w - 96, top: top, bottom: bottom };
+            }
+            function glassRect(cv, x, y, w, h, r) {
+                // Liquid Glass on a blurred backdrop: a light frosted fill, a brighter rim, a highlight along the top
+                cv.roundRect(x, y, w, h, r, G.withAlpha(WHITE, 0.12));
+                cv.strokeRoundRect(x, y, w, h, r, 1, G.withAlpha(WHITE, 0.3));
+                cv.roundRect(x + r * 0.6, y + 1.5, w - r * 1.2, 1.5, 1, G.withAlpha(WHITE, 0.35));
+            }
+            function openSettings() { try { const b = ui.rhmi && ui.rhmi.getByName('BTN_SETTINGS'); if (b && b.emit) b.emit('action', {}); } catch (e) { log.warn('settings: ' + e.message); } }
+            function glassChrome(cv, Q, a, P, now) {
+                const A = Q.A, B = { font: F_BOLD, literal: true }, M = { font: F_MED, literal: true };
+                // the capsule: cover, title, artist
+                const s = 76, cx = A.x + 24, cy = A.y + 18, tw = Math.min(620, Math.max(cv.textWidth(LyricsLib.fold(cur.title), 28, B), cv.textWidth(LyricsLib.fold(cur.artist || ''), 22, M)));
+                glassRect(cv, cx, cy, s + tw + 52, s + 16, (s + 16) / 2);
+                if (a) cv.image(ART_ID, cx + 8, cy + 8, s, s);
+                else cv.card(cx + 8, cy + 8, s, s, 12, [[0, P.art1], [1, P.art2]]);
+                cv.text(fit(cv, cur.title, 28, 620, B), cx + s + 26, cy + 44, 28, WHITE, B);
+                cv.text(fit(cv, cur.artist || '', 22, 620, M), cx + s + 26, cy + 74, 22, G.withAlpha(WHITE, 0.66), M);
+                // ⋯ (Settings), round glass, top right
+                const d = 64, mx = A.right - 24 - d, my = A.y + 24;
+                glassRect(cv, mx, my, d, d, d / 2);
+                for (let k = -1; k <= 1; k++) cv.circle(mx + d / 2 + k * 13, my + d / 2, 4, WHITE);
+                if (cv.own) FS.button(cv, 'more', mx, my, d, d, guard('more', openSettings), { r: d / 2, slop: 10 });
+                // progress: a slim glass pill with the times
+                const pos = Math.max(0, position(now) - offset()), dur = cur.duration || 0, pw = Math.min(760, A.w - 96), px = A.x + (A.w - pw) / 2, py = A.bottom - 50;
+                glassRect(cv, px, py, pw, 36, 18);
+                const bx = px + 76, bw = pw - 152;
+                cv.roundRect(bx, py + 16, bw, 4, 2, G.withAlpha(WHITE, 0.25));
+                if (dur) cv.roundRect(bx, py + 16, Math.max(4, Math.min(1, pos / dur) * bw), 4, 2, WHITE);
+                cv.text(mmss(pos), px + 22, py + 24, 16, G.withAlpha(WHITE, 0.75), M);
+                cv.text(dur ? '-' + mmss(dur - pos) : '', px + pw - 22, py + 24, 16, G.withAlpha(WHITE, 0.75), Object.assign({ align: 'right' }, M));
+                if (!clk && cv.own) {
+                    const bw2 = 220, bx2 = A.right - 24 - bw2, by2 = py - 4;
+                    glassRect(cv, bx2, by2, bw2, 44, 22);
+                    cv.text('Song just started', bx2 + bw2 / 2, by2 + 29, 18, WHITE, { align: 'center', font: F_BOLD, literal: true });
+                    FS.button(cv, 'sync', bx2, by2, bw2, 44, sync, { r: 22 });
+                }
+            }
+
             function geo(A) {
                 const S = Math.round(Math.max(240, Math.min(420, A.h - 150)));
                 const half = A.x + Math.round(A.w * 0.46);
@@ -285,7 +329,7 @@ mgu.run({
                     const shown = glide.i === -2 ? target : scrollOf(glide, 0, now);
                     glide = { i: i, from: shown, to: target, at: now, prev: glide.i };
                 }
-                const top = Q.A.y, bottom = Q.A.bottom, anchor = top + Math.round((bottom - top) * 0.3);
+                const top = Q.top || Q.A.y, bottom = Q.bottom || Q.A.bottom, anchor = top + Math.round((bottom - top) * (Q.glass ? 0.22 : 0.3));
                 const fadeIn = easeOut((now - glide.at) / FADE_MS);
                 cv.clip(Q.LX - 20, top, W - (Q.LX - 20), bottom - top);
                 const first = Math.max(0, i - 3);
@@ -334,7 +378,7 @@ mgu.run({
                 }
             }
             function drawPlain(cv, Q, text) {
-                cv.text('Lyrics (not synced to the song)', Q.LX, Q.A.y + 34, 18, G.withAlpha(WHITE, 0.6), { font: F_MED, literal: true });
+                cv.text('Lyrics (not synced to the song)', Q.LX, (Q.top || Q.A.y) + 34, 18, G.withAlpha(WHITE, 0.6), { font: F_MED, literal: true });
                 let y = Q.A.y + 80;
                 text.filter(Boolean).some((s, k) => {
                     const rows = wrap(cv, s, 32, Q.LW, 2, { font: F_BOLD, literal: true });
@@ -367,7 +411,7 @@ mgu.run({
                     cv.fillRect(0, 0, w, fullH, c);
                     for (let i = 0; i < fade; i += 3) cv.fillRect(w + i, 0, 3, fullH, G.withAlpha(c, 1 - (i + 1.5) / fade));
                 };
-                if (cv.chrome) G.frame(cv, ctx.theme(), ['Lyrics', 'Probe'], 0, []);
+                if (cv.chrome) G.frame(cv, ctx.theme(), settings.get('probe_tab') ? ['Lyrics', 'Probe'] : [], 0, []);   // no tabs: the ⋯ button opens Settings
                 if (!cur) follow();
                 if (!cur) {
                     const P = nameColours('Car Lyrics');
@@ -376,9 +420,9 @@ mgu.run({
                     cv.text('Play a song on your phone', A.x + A.w / 2, cy - 6, 40, WHITE, { font: F_BOLD, align: 'center', literal: true });
                     cv.text('Apple Music over CarPlay, or any app over Bluetooth. The lyrics show up here.', A.x + A.w / 2, cy + 40, 22, G.withAlpha(WHITE, 0.62), { align: 'center', font: F_MED, literal: true });
                 } else {
-                    const P = nameColours(cur.title + cur.artist), a = artFor(), Q = geo(A);
+                    const P = nameColours(cur.title + cur.artist), a = artFor(), Q = glassOn() ? geoGlass(A) : geo(A);
                     backdrop(cv, a, now, P, fullH); sideBand(a, P);
-                    coverColumn(cv, Q, a, P, now);
+                    if (Q.glass) glassChrome(cv, Q, a, P, now); else coverColumn(cv, Q, a, P, now);
                     const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
                     if (lyr.state === 'synced' && lyr.lines.length) drawSynced(cv, Q, lyr.lines, now);
                     else if (lyr.state === 'plain') drawPlain(cv, Q, lyr.text);
