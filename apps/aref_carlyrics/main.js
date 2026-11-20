@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.5.1';
+const VERSION = '0.5.2';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -261,7 +261,8 @@ mgu.run({
             function backdrop(cv, a, now, P, fullH) {
                 if (a) {
                     // two blurred layers of the cover drifting past each other, slowly, as Apple Music's background flows
-                    const d = cur && cur.playing ? now / 1000 : 0;
+                    // Settings > Background motion: still (default) or a slow drift, as Apple Music's
+                    const d = settings.get('bg_motion') === 'drift' && cur && cur.playing ? now / 1000 : 0;
                     const layer = (id, sc, fx, fy, ph) => {
                         const bw = W * sc, bh = fullH * sc;
                         cv.image(id, (W - bw) / 2 + Math.sin(d / fx + ph) * 0.07 * W, (fullH - bh) / 2 + Math.cos(d / fy + ph) * 0.07 * fullH, bw, bh);
