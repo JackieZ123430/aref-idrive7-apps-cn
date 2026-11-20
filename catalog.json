@@ -793,12 +793,12 @@
       ],
       "uninstallable": true,
       "author": "汉化 小白151",
-      "version": "0.2.301",
+      "version": "0.2.302",
       "artifact": {
-        "name": "aref_carcare@0.2.301.tgz",
-        "size": 1239950,
-        "sha256": "3ddd42807b1687a064ee395490ac25d985635054d3d8e4746b03d6e031b09a37",
-        "url": "https://github.com/JackieZ123430/MGU-CN-XIAOBAI/releases/download/source-refresh-2026-11-20/aref_carcare%400.2.301.tgz"
+        "name": "aref_carcare@0.2.302.tgz",
+        "size": 1242780,
+        "sha256": "9b4bfff866cbf91801535f64af233b100b70a91a0e1bbe1307640b907c654ae3",
+        "url": "https://github.com/JackieZ123430/MGU-CN-XIAOBAI/releases/download/widget-chinese-r2-2026-11-20/aref_carcare%400.2.302.tgz"
       },
       "requires": {
         "idrive7-renderd": "2.1.7",
@@ -817,12 +817,12 @@
       ],
       "uninstallable": true,
       "author": "汉化 小白151",
-      "version": "0.5.701",
+      "version": "0.5.702",
       "artifact": {
-        "name": "aref_carlyrics@0.5.701.tgz",
-        "size": 1489968,
-        "sha256": "785e38ed5a8961bce5a2ef60d98d34df8dd099652cd33502606b3d91cd0e323d",
-        "url": "https://github.com/JackieZ123430/MGU-CN-XIAOBAI/releases/download/source-refresh-2026-11-20/aref_carlyrics%400.5.701.tgz"
+        "name": "aref_carlyrics@0.5.702.tgz",
+        "size": 1492801,
+        "sha256": "bde74df1e6378ad0b205651636676fadde39aa25fc2c97fac998a613c172d443",
+        "url": "https://github.com/JackieZ123430/MGU-CN-XIAOBAI/releases/download/widget-chinese-r2-2026-11-20/aref_carlyrics%400.5.702.tgz"
       },
       "requires": {
         "idrive7-renderd": "2.1.7",
@@ -842,12 +842,12 @@
       ],
       "uninstallable": true,
       "author": "汉化 小白151",
-      "version": "0.1.301",
+      "version": "0.1.302",
       "artifact": {
-        "name": "aref_carwatch@0.1.301.tgz",
-        "size": 1258676,
-        "sha256": "803aa200285cba28668127ac06c6b346672a415cb2aa93dfa290995d2a6dac38",
-        "url": "https://github.com/JackieZ123430/MGU-CN-XIAOBAI/releases/download/source-refresh-2026-11-20/aref_carwatch%400.1.301.tgz"
+        "name": "aref_carwatch@0.1.302.tgz",
+        "size": 1261584,
+        "sha256": "d176accbf54be8979e42be4ceaa035784847349f599f833b201dcd5518997b7e",
+        "url": "https://github.com/JackieZ123430/MGU-CN-XIAOBAI/releases/download/widget-chinese-r2-2026-11-20/aref_carwatch%400.1.302.tgz"
       },
       "requires": {
         "idrive7-renderd": "2.1.7",
@@ -866,12 +866,12 @@
       ],
       "uninstallable": true,
       "author": "汉化 小白151",
-      "version": "1.20.101",
+      "version": "1.20.102",
       "artifact": {
-        "name": "aref_eta@1.20.101.tgz",
-        "size": 1779726,
-        "sha256": "e579bf3f098ac1c0a203ac3bf93e0e0e722417e0646a139ed0beaa7928aae84f",
-        "url": "https://github.com/JackieZ123430/MGU-CN-XIAOBAI/releases/download/source-refresh-2026-11-20/aref_eta%401.20.101.tgz"
+        "name": "aref_eta@1.20.102.tgz",
+        "size": 1782671,
+        "sha256": "268ecab4a34756694894886c0d0ad585de915e982014cdba22527a1e7b906b27",
+        "url": "https://github.com/JackieZ123430/MGU-CN-XIAOBAI/releases/download/widget-chinese-r2-2026-11-20/aref_eta%401.20.102.tgz"
       },
       "requires": {
         "idrive7-renderd": "2.1.7",
