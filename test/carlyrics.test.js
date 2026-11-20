@@ -265,6 +265,24 @@ test('artwork from the car itself: its own cover file, no internet', async () =>
     assert.strictEqual(e.state, 'ready'); assert.strictEqual(e.n, 300); assert.strictEqual(net, 0);
 });
 
+test('artwork: the car\'s own cover replaces an iTunes one when it shows up later', async () => {
+    const jpg = fs.readFileSync(path.join(__dirname, 'fixtures', 'cover.jpg'));
+    const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mediaramdisk-'));
+    const file = '/tmp/' + path.basename(dir) + '/cover_MGU_MediaEngineWifi_3.jpg';
+    const online = (m, host) => Promise.resolve(host === 'itunes.apple.com'
+        ? { status: 200, body: Buffer.from(JSON.stringify({ results: [{ trackName: 'Do Re Mi', artistName: 'blackbear', collectionName: 'Other', artworkUrl100: 'https://x/100x100bb.jpg' }] })) }
+        : { status: 200, body: jpg });
+    const a = new ART.Artwork(online, { info() {}, warn() {} }, undefined, { px: 300, blur: false });
+    const t = { title: 'Do Re Mi', artist: 'blackbear', album: 'digital druglord' };
+    a.get(t); await new Promise((r) => setTimeout(r, 300));
+    const e1 = a.get(t);
+    assert.strictEqual(e1.state, 'ready'); assert.strictEqual(e1.src, 'itunes');
+    fs.writeFileSync(file, jpg);
+    a.get(Object.assign({ cover: file }, t)); await new Promise((r) => setTimeout(r, 300));
+    const e2 = a.get(Object.assign({ cover: file }, t));
+    assert.strictEqual(e2.src, 'car'); assert.ok(e2.ver > e1.ver);
+});
+
 test('LRC parsing and the line at a time', () => {
     const lines = L.parseLrc('[00:01.00]First\n[00:05.50]Second\n[00:10.00]Third');
     assert.strictEqual(lines.length, 3);

@@ -107,7 +107,7 @@ function draw(c, fonts) {
  * The progress bar and time left, a small picture of its own (BAR_W x BAR_H): it changes every second, the cover and
  * names only once a song, so the big picture isn't sent to the cluster each second (Nov 19: ~10 MB a minute).
  */
-const BAR_W = 380, BAR_H = 56, BAR_Y = 36;           // the bar's line inside its picture (room above for the time)
+const BAR_W = 380, BAR_H = 90, BAR_Y = 52;           // the bar's line inside its picture (room above for the time)
 function barTop(n) { return 76 - Math.round((n - 140) / 2) + n + 92 + 9 - BAR_Y; }
 /**
  * st: { w: length, h: thickness (3 thin .. 9 BMW's), time: 'right' | 'above' (BMW: over the bar's right end),
@@ -126,7 +126,8 @@ function drawBar(m, fonts, st) {
     if (st.back) {
         // a soft black glow behind them (BMW's), no hard edge: many rounded rects, each smaller and a little darker
         const x0 = bx - 4, x1 = (st.time === 'right' ? bx + bw + 12 + tw : bx + bw) + 4, y0 = st.time === 'above' ? BAR_Y - 24 : BAR_Y - 8, y1 = BAR_Y + 8;
-        for (let k = 10; k >= 0; k--) cv.roundRect(x0 - k * 2, y0 - k * 1.6, x1 - x0 + k * 4, y1 - y0 + k * 3.2, 10 + k * 2, [0, 0, 0, 16]);
+        // (Nov 20: softer: fainter steps spread wider, so the edge fades out over ~30 px)
+        for (let k = 14; k >= 0; k--) cv.roundRect(x0 - k * 2.2, y0 - k * 1.3, x1 - x0 + k * 4.4, y1 - y0 + k * 2.6, 12 + k * 2.2, [0, 0, 0, 8]);
     }
     cv.roundRect(bx, by, bw, th, r, [255, 255, 255, th > 4 ? 95 : 60]);
     if (f > 0) cv.roundRect(bx, by, Math.max(th, bw * f), th, r, [255, 106, 0, 255]);

@@ -32,7 +32,8 @@ const SATURATE = 1.5;         // ... and its colour (Apple Music: saturate(1.5))
 const RETRY_MS = 60000;       // a failed lookup is tried again after this long
 const CACHE = 4;              // covers kept (a song played again, skipping back)
 const SETTLE_MS = 300;        // skipping fast: a song is looked up once it has been current this long ...
-const SKIP_MS = 4000;         // ... unless the song before it played this long (not skipping): then at once
+const SKIP_MS = 4000;
+const CAR_WAIT_MS = 2500;      // a new song: give the car this long to name its own cover before asking iTunes         // ... unless the song before it played this long (not skipping): then at once
 const MISSING_MS = 600000;    // no match found: asked again after 10 min (a skip can send a half-changed title)
 const DISK_MAX = 300;         // covers kept on disk (opts.dir): a song played again shows at once, even offline
 
@@ -176,12 +177,20 @@ class Artwork {
         const k = Artwork.key(track), e = this.cache.get(k), now = Date.now();
         // offline, iTunes failed: once the car names its own cover file, try again at once
         const again = e && (e.state === 'error' || e.state === 'missing') && track.cover && e.cover0 !== track.cover;
+        if (track.cover) this.sawCover = true;
+        // a cover from iTunes or the disk while the car has its own file: the car's wins (it's what Apple Music shows)
+        if (e && e.state === 'ready' && e.src !== 'car' && track.cover && e.carTried !== track.cover && !this.busy.has(k + '#car')) {
+            e.carTried = track.cover;
+            this.busy.add(k + '#car');
+            this._fromCar(track, this._file(k)).then((v) => { if (v) this._put(k, v); }, () => {}).then(() => this.busy.delete(k + '#car'));
+        }
         if (e && !again && !(e.state === 'error' && now - e.at > RETRY_MS) && !(e.state === 'missing' && now - e.at > MISSING_MS)) return e;
         if (this.want.k !== k) this.want = { k: k, since: now - (now - this.want.since >= SKIP_MS ? SETTLE_MS : 0) };
         // one lookup at a time, for the song that has stayed current: fast skips start nothing
         const settled = now - this.want.since >= SETTLE_MS || !!track.cover || (this.opts.dir && this._file(k) && require('fs').existsSync(this._file(k)));
         // the song that stays current may start beside one older lookup still on its way (at most two)
-        if (!this.busy.has(k) && this.busy.size < 2 && settled) {
+        const waitCar = this.sawCover && !track.cover && now - this.want.since < CAR_WAIT_MS;
+        if (!this.busy.has(k) && this.busy.size < 2 && settled && !waitCar) {
             this.busy.add(k);
             this._load(track).then((v) => this._put(k, v), (err) => {
                 this.log.warn('artwork: ' + (err && err.message));
@@ -203,21 +212,9 @@ class Artwork {
     async _load(track) {
         const fs = require('fs'), f = this._file(Artwork.key(track)), t0 = Date.now();
         // the car's own copy of the phone's artwork (offline; the file can come a moment after the metadata)
-        if (track.cover && /^\/tmp\/mediaramdisk/.test(track.cover) && /\.(jpe?g)$/i.test(track.cover)) {
-            for (let i = 0; i < 4; i++) {
-                try {
-                    const buf = await new Promise((ok, no) => fs.readFile(track.cover, (e, b) => (e ? no(e) : ok(b))));
-                    if (buf.length > 100) {
-                        const v = this.fromJpeg(buf);
-                        if (f) this._save(f, buf);
-                        this.log.info('artwork: from the car in ' + (Date.now() - t0) + ' ms');
-                        return v;
-                    }
-                } catch (e) { if (i === 3) this.log.info('artwork: the car\'s file ' + (e.code || e.message)); }
-                await new Promise((ok) => setTimeout(ok, 300));
-            }
-        }
-        if (f) { try { const buf = fs.readFileSync(f); const v = this.fromJpeg(buf); this.log.info('artwork: from disk in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* not cached */ } }
+        const car = await this._fromCar(track, f);
+        if (car) return car;
+        if (f) { try { const buf = fs.readFileSync(f); const v = this.fromJpeg(buf); v.src = 'disk'; this.log.info('artwork: from disk in ' + (Date.now() - t0) + ' ms'); return v; } catch (e) { /* not cached */ } }
         const term = [LyricsLib.baseTitle(track.title), String(track.artist || '').split(/,|&/)[0]].join(' ');
         const q = querystring.stringify({ term: term, media: 'music', entity: 'song', limit: 10 });
         const r = await this.request('GET', 'itunes.apple.com', '/search?' + q, { Accept: 'application/json' });
@@ -240,9 +237,30 @@ class Artwork {
         const img = await this.request('GET', u.hostname, u.path, {});
         if (img.status !== 200) throw new Error('artwork HTTP ' + img.status);
         const t2 = Date.now(), v = this.fromJpeg(img.body);
+        v.src = 'itunes';
         if (f) this._save(f, img.body);
         this.log.info('artwork: ready in ' + (Date.now() - t0) + ' ms (search ' + (t1 - t0) + ', image ' + (t2 - t1) + ', decode ' + (Date.now() - t2) + ')');
         return v;
+    }
+
+    /** The car's own cover file for track (track.cover), or null: tried for up to ~2.4 s while the car writes it. */
+    async _fromCar(track, f) {
+        const fs = require('fs'), t0 = Date.now();
+        if (!(track.cover && /^\/tmp\/mediaramdisk/.test(track.cover) && /\.(jpe?g)$/i.test(track.cover))) return null;
+        for (let i = 0; i < 8; i++) {
+            try {
+                const buf = await new Promise((ok, no) => fs.readFile(track.cover, (e, b) => (e ? no(e) : ok(b))));
+                if (buf.length > 100) {
+                    const v = this.fromJpeg(buf);
+                    v.src = 'car';
+                    if (f) this._save(f, buf);
+                    this.log.info('artwork: from the car in ' + (Date.now() - t0) + ' ms');
+                    return v;
+                }
+            } catch (e) { if (i === 7) this.log.info('artwork: the car\'s file ' + (e.code || e.message)); }
+            await new Promise((ok) => setTimeout(ok, 300));
+        }
+        return null;
     }
 
     _save(f, buf) {
