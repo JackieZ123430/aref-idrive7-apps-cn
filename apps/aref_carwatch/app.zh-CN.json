@@ -1,0 +1,260 @@
+{
+  "id": "aref_carwatch",
+  "title": "车辆监控",
+  "description": "合并行程、失火和故障监控，保留事件发生时的车辆状态，支持首页组件；只读观察车辆数据。",
+  "version": "0.1.301",
+  "vendor": "aref",
+  "loggingId": "OAR8",
+  "mguAppStartType": "autostart",
+  "startWidget": {
+    "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
+    "name": "车辆监控",
+    "layout": "LT_Table_OnlineApps_DriveRecorderWidget",
+    "image": "BackgroundImage1",
+    "size": [
+      384,
+      256
+    ],
+    "safe": [
+      0.09,
+      0.1
+    ],
+    "cells": {
+      "ErrorInfo": [
+        false,
+        "Bool"
+      ],
+      "background": [
+        true,
+        "Bool"
+      ],
+      "Title": [
+        "",
+        "Text"
+      ],
+      "ProgressbarVisible": [
+        false,
+        "Bool"
+      ],
+      "Progress": [
+        0,
+        "Float"
+      ],
+      "TextRecordings": [
+        "",
+        "Text"
+      ],
+      "TextCam": [
+        "",
+        "Text"
+      ],
+      "TimeElapsed": [
+        "",
+        "Text"
+      ],
+      "TimeRemaining": [
+        "",
+        "Text"
+      ]
+    }
+  },
+  "signals": {
+    "com.harman.infotainment.systemfunctions.tasu.tasu.InternalTasu": {
+      "_instances": "SystemFunctionsInternalTasuInst1",
+      "_methods": [
+        "sendTasuRequest"
+      ],
+      "_broadcasts": [
+        "sendTasuResponse"
+      ]
+    },
+    "de.bmw.infotainment.vehicle.CDS": {
+      "statusEngineSpeed2": "rs",
+      "statusEngineTemperature": "rs"
+    },
+    "de.bmw.infotainment.vehicle.Vehicle2": {
+      "statusCarSpeed2": "rs"
+    },
+    "de.bmw.infrastructure.VehicleInformation": {
+      "statusGearboxDrive": "s",
+      "DataPowerTrain2": "s"
+    },
+    "de.bmw.infotainment.drivingexcitement.FES": {
+      "_optional": "drive mode and engine torque in misfire and fault conditions",
+      "statusFESVehicleDynamicSwitchHMI": "rs",
+      "statusActualValueTorque2": "rs"
+    },
+    "de.bmw.infotainment.vehicle.CDS2": {
+      "statusLongitudinalAccelerationMassCenter": "rs",
+      "statusLateralAccelerationMassCenter": "rs"
+    }
+  },
+  "screens": [
+    {
+      "name": "MAIN",
+      "kind": "canvas",
+      "title": "车辆监控",
+      "buttons": [
+        [
+          "BTN_SECTION",
+          "显示故障"
+        ],
+        [
+          "MF_VIEW",
+          "失火记录"
+        ],
+        [
+          "MF_MORE",
+          "更多"
+        ],
+        [
+          "MF_SAVE",
+          "导出 CSV"
+        ],
+        [
+          "FW_SCAN",
+          "立即扫描"
+        ],
+        [
+          "FW_VIEW",
+          "当前故障"
+        ],
+        [
+          "FW_MORE",
+          "更多"
+        ],
+        [
+          "DL_VIEW",
+          "历史"
+        ],
+        [
+          "DL_DRAGY",
+          "输入 Dragy 测量时间"
+        ],
+        [
+          "DL_EXPORT",
+          "导出 CSV"
+        ],
+        [
+          "DL_MORE",
+          "更多"
+        ],
+        [
+          "DL_UP",
+          "+0.1 s"
+        ],
+        [
+          "DL_DOWN",
+          "-0.1 s"
+        ],
+        [
+          "DL_UP2",
+          "+0.01 s"
+        ],
+        [
+          "DL_DOWN2",
+          "-0.01 s"
+        ],
+        [
+          "DL_SAVE",
+          "保存"
+        ],
+        [
+          "DL_SKIP",
+          "暂无 Dragy 测量时间"
+        ],
+        [
+          "BTN_SETTINGS",
+          "设置"
+        ]
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "theme",
+      "label": "配色",
+      "type": "choice",
+      "default": "m_tricolour",
+      "options": [
+        [
+          "m_red",
+          "M 红色"
+        ],
+        [
+          "m_tricolour",
+          "M 三色"
+        ],
+        [
+          "ice",
+          "冰晶白"
+        ],
+        [
+          "amber",
+          "夜间琥珀"
+        ]
+      ]
+    },
+    {
+      "key": "units",
+      "label": "单位",
+      "type": "choice",
+      "default": "us",
+      "options": [
+        [
+          "us",
+          "英里/小时、℉"
+        ],
+        [
+          "metric",
+          "公里/小时、℃"
+        ]
+      ]
+    },
+    {
+      "key": "mf_alert",
+      "label": "每次行程失火警告阈值",
+      "type": "number",
+      "default": 10,
+      "steps": [
+        1,
+        5,
+        10,
+        25,
+        50
+      ]
+    },
+    {
+      "key": "mf_every",
+      "label": "失火计数读取间隔",
+      "type": "number",
+      "unit": "s",
+      "default": 4,
+      "steps": [
+        2,
+        4,
+        8,
+        15
+      ]
+    },
+    {
+      "key": "fw_every",
+      "label": "故障扫描间隔",
+      "type": "number",
+      "unit": "min",
+      "default": 10,
+      "steps": [
+        5,
+        10,
+        15,
+        30
+      ]
+    },
+    {
+      "key": "dl_dragy",
+      "label": "行程：与 Dragy 对比",
+      "type": "bool",
+      "default": false
+    }
+  ]
+}

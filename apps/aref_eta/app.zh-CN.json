@@ -1,0 +1,665 @@
+{
+  "id": "aref_eta",
+  "title": "导航到达时间",
+  "description": "显示苹果地图导航的到达时间、剩余时间和距离，支持首页组件及仪表信息条；仪表显示需要渲染组件。",
+  "version": "1.20.101",
+  "vendor": "aref",
+  "loggingId": "OAR7",
+  "mguAppStartType": "autostart",
+  "startWidget": {
+    "comment": "Home-screen widget (kit/runtime/homewidget.js): the big size is a 384 x 256 picture main.js draws, the small size two text lines.",
+    "name": "预计到达时间",
+    "layout": "LT_Table_OnlineApps_DriveRecorderWidget",
+    "image": "BackgroundImage1",
+    "size": [
+      384,
+      256
+    ],
+    "safe": [
+      0.09,
+      0.1
+    ],
+    "cells": {
+      "ErrorInfo": [
+        false,
+        "Bool"
+      ],
+      "background": [
+        true,
+        "Bool"
+      ],
+      "Title": [
+        "",
+        "Text"
+      ],
+      "ProgressbarVisible": [
+        false,
+        "Bool"
+      ],
+      "Progress": [
+        0,
+        "Float"
+      ],
+      "TextRecordings": [
+        "",
+        "Text"
+      ],
+      "TextCam": [
+        "",
+        "Text"
+      ],
+      "TimeElapsed": [
+        "",
+        "Text"
+      ],
+      "TimeRemaining": [
+        "",
+        "Text"
+      ]
+    }
+  },
+  "signals": {
+    "de.bmw.infotainment.navigation.projectedmodeguiding.ProjectedModeGuiding": {
+      "_instances": "Main_Instance",
+      "waypoints": "rs",
+      "currentRoad": "rs",
+      "activeRouteChange": "rs"
+    },
+    "de.bmw.infotainment.navigation.guiding.Guidance": {
+      "_instances": "Main_Instance",
+      "finalDestinationInfo": "rs",
+      "nextDestinationInfo": "rs",
+      "allDestinationsInfo": "rs",
+      "guidanceState": "rs",
+      "guidingProvider": "rs",
+      "currentRoad": "rs",
+      "travelledDistance": "rs",
+      "travelledTime": "rs"
+    },
+    "de.bmw.infotainment.a4a.carplay.CarPlayManager": "*",
+    "de.bmw.infotainment.navigation.navigationstatus.NavigationStatus": {
+      "_optional": "the street name under the island",
+      "currentLocation": "rs"
+    },
+    "de.bmw.infotainment.vehicle.CDS": {
+      "_optional": "oil and coolant temperature in the second slot",
+      "statusEngineTemperature": "rs"
+    },
+    "de.bmw.infotainment.vehicle.CDS2": {
+      "_optional": "g in the second slot",
+      "statusLongitudinalAccelerationMassCenter": "rs",
+      "statusLateralAccelerationMassCenter": "rs"
+    },
+    "de.bmw.infrastructure.VehicleInformation": {
+      "_optional": "the gear in the second slot",
+      "statusGearboxDrive": "s",
+      "DataPowerTrain2": "s"
+    },
+    "de.bmw.infotainment.misc.MDrive": {
+      "_optional": "the gearbox program (S / M) in the second slot",
+      "dataDisplayGearbox": "s"
+    },
+    "de.bmw.infotainment.entertainment.mediaplayer.MediaPlayer": "*",
+    "de.bmw.infotainment.hmi.hmimediastate.HmiMediaState": "*",
+    "de.bmw.infotainment.entertainment.dynamicmediaplayer.DynamicMediaPlayer": "*",
+    "de.bmw.infotainment.KombiInterface_2": {
+      "_optional": "hiding the ETA while BMW shows a Check Control message",
+      "newCCMessage": "rs"
+    }
+  },
+  "screens": [
+    {
+      "name": "MAIN",
+      "kind": "canvas",
+      "title": "到达时间栏",
+      "buttons": [
+        [
+          "BTN_TOGGLE",
+          "关闭到达时间显示"
+        ],
+        [
+          "BTN_PREVIEW",
+          "预览"
+        ],
+        [
+          "BTN_UP",
+          "向上"
+        ],
+        [
+          "BTN_DOWN",
+          "向下"
+        ],
+        [
+          "BTN_LEFT",
+          "左侧"
+        ],
+        [
+          "BTN_RIGHT",
+          "右侧"
+        ],
+        [
+          "BTN_BIGGER",
+          "较大"
+        ],
+        [
+          "BTN_SMALLER",
+          "较小"
+        ],
+        [
+          "BTN_RESET",
+          "重置"
+        ],
+        [
+          "BTN_TARGET",
+          "行驶中：到达时间"
+        ],
+        [
+          "BTN_MORE",
+          "诊断"
+        ],
+        [
+          "BTN_SETTINGS",
+          "设置"
+        ]
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "preset",
+      "label": "显示位置",
+      "type": "choice",
+      "default": "bottom",
+      "options": [
+        [
+          "bottom",
+          "底部信息条（间歇显示时恢复原车音乐／行程组件）"
+        ],
+        [
+          "island",
+          "顶部信息岛（位于仪表地图上，保留原车组件）"
+        ]
+      ]
+    },
+    {
+      "key": "island_every",
+      "label": "显示频率",
+      "type": "choice",
+      "default": "stay",
+      "options": [
+        [
+          "stay",
+          "始终显示（整个导航过程）"
+        ],
+        [
+          "10",
+          "每 10 秒"
+        ],
+        [
+          "30",
+          "每 30 秒"
+        ],
+        [
+          "60",
+          "每分钟"
+        ],
+        [
+          "300",
+          "每 5 分钟"
+        ],
+        [
+          "change",
+          "到达时间变化时"
+        ]
+      ]
+    },
+    {
+      "key": "street",
+      "label": "底部街道名（信息岛，隐藏原车音乐／行程组件）",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "look",
+      "label": "外观",
+      "type": "choice",
+      "default": "black",
+      "options": [
+        [
+          "black",
+          "黑色"
+        ],
+        [
+          "glass",
+          "玻璃效果（苹果深色玻璃）"
+        ],
+        [
+          "smoked",
+          "烟熏半透明"
+        ],
+        [
+          "outline",
+          "轮廓"
+        ],
+        [
+          "plain",
+          "纯文字"
+        ]
+      ]
+    },
+    {
+      "key": "font",
+      "label": "字体",
+      "type": "choice",
+      "default": "apple",
+      "options": [
+        [
+          "apple",
+          "苹果风格（Inter 字体）"
+        ],
+        [
+          "bmw",
+          "宝马风格（Barlow 字体）"
+        ]
+      ]
+    },
+    {
+      "key": "layout",
+      "label": "布局",
+      "type": "choice",
+      "default": "row",
+      "options": [
+        [
+          "row",
+          "单行"
+        ],
+        [
+          "stacked",
+          "堆叠布局（苹果地图卡片）"
+        ]
+      ]
+    },
+    {
+      "key": "second_slot",
+      "label": "第二位置（右侧仪表，替换原车组件）",
+      "type": "choice",
+      "default": "off",
+      "options": [
+        [
+          "off",
+          "关闭"
+        ],
+        [
+          "engine",
+          "机油温度与挡位"
+        ],
+        [
+          "temps",
+          "机油与冷却液温度"
+        ],
+        [
+          "g",
+          "G 值"
+        ],
+        [
+          "clock",
+          "时钟"
+        ],
+        [
+          "music",
+          "当前曲目与专辑封面"
+        ]
+      ]
+    },
+    {
+      "key": "music_cover_size",
+      "label": "音乐：封面尺寸",
+      "type": "choice",
+      "default": "medium",
+      "options": [
+        [
+          "small",
+          "小"
+        ],
+        [
+          "medium",
+          "中"
+        ],
+        [
+          "large",
+          "大"
+        ],
+        [
+          "xl",
+          "特大"
+        ]
+      ]
+    },
+    {
+      "key": "music_bar",
+      "label": "音乐：进度条长度",
+      "type": "choice",
+      "default": "medium",
+      "options": [
+        [
+          "short",
+          "短"
+        ],
+        [
+          "medium",
+          "中"
+        ],
+        [
+          "long",
+          "长"
+        ],
+        [
+          "full",
+          "全宽"
+        ]
+      ]
+    },
+    {
+      "key": "music_bar_thick",
+      "label": "音乐：进度条粗细",
+      "type": "choice",
+      "default": "thin",
+      "options": [
+        [
+          "thin",
+          "细"
+        ],
+        [
+          "medium",
+          "中"
+        ],
+        [
+          "thick",
+          "粗（宝马风格）"
+        ]
+      ]
+    },
+    {
+      "key": "music_time",
+      "label": "音乐：剩余时间",
+      "type": "choice",
+      "default": "right",
+      "options": [
+        [
+          "right",
+          "信息条右侧"
+        ],
+        [
+          "above",
+          "信息条末端上方（宝马风格）"
+        ]
+      ]
+    },
+    {
+      "key": "music_bar_back",
+      "label": "音乐：进度条后方黑色柔光背景",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "music_text_back",
+      "label": "音乐：封面和曲目名称后方黑色柔光背景",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "music_shape",
+      "label": "音乐背景形状",
+      "type": "choice",
+      "default": "bmw",
+      "options": [
+        [
+          "bmw",
+          "宝马风格（类似原车组件）"
+        ],
+        [
+          "full",
+          "完整仪表区域"
+        ],
+        [
+          "circle",
+          "圆形"
+        ],
+        [
+          "half",
+          "半圆（D 形）"
+        ],
+        [
+          "diamond",
+          "菱形"
+        ],
+        [
+          "heart",
+          "心形"
+        ],
+        [
+          "square",
+          "方形"
+        ],
+        [
+          "off",
+          "无背景"
+        ]
+      ]
+    },
+    {
+      "key": "music_edge_top",
+      "label": "音乐背景：上边缘",
+      "type": "choice",
+      "default": "soft",
+      "options": [
+        [
+          "sharp",
+          "锐利"
+        ],
+        [
+          "soft",
+          "柔和"
+        ],
+        [
+          "softer",
+          "更柔和"
+        ],
+        [
+          "fade",
+          "渐变"
+        ],
+        [
+          "long",
+          "长距离渐变"
+        ]
+      ]
+    },
+    {
+      "key": "music_edge_bottom",
+      "label": "音乐背景：下边缘",
+      "type": "choice",
+      "default": "fade",
+      "options": [
+        [
+          "sharp",
+          "锐利"
+        ],
+        [
+          "soft",
+          "柔和"
+        ],
+        [
+          "softer",
+          "更柔和"
+        ],
+        [
+          "fade",
+          "渐变"
+        ],
+        [
+          "long",
+          "长距离渐变"
+        ]
+      ]
+    },
+    {
+      "key": "music_edge_left",
+      "label": "音乐背景：左边缘",
+      "type": "choice",
+      "default": "soft",
+      "options": [
+        [
+          "sharp",
+          "锐利"
+        ],
+        [
+          "soft",
+          "柔和"
+        ],
+        [
+          "softer",
+          "更柔和"
+        ],
+        [
+          "fade",
+          "渐变"
+        ],
+        [
+          "long",
+          "长距离渐变"
+        ]
+      ]
+    },
+    {
+      "key": "music_edge_right",
+      "label": "音乐背景：右边缘",
+      "type": "choice",
+      "default": "soft",
+      "options": [
+        [
+          "sharp",
+          "锐利"
+        ],
+        [
+          "soft",
+          "柔和"
+        ],
+        [
+          "softer",
+          "更柔和"
+        ],
+        [
+          "fade",
+          "渐变"
+        ],
+        [
+          "long",
+          "长距离渐变"
+        ]
+      ]
+    },
+    {
+      "key": "music_opacity",
+      "label": "音乐背景不透明度",
+      "type": "choice",
+      "default": "100",
+      "options": [
+        [
+          "100",
+          "100 %"
+        ],
+        [
+          "80",
+          "80 %"
+        ],
+        [
+          "60",
+          "60 %"
+        ],
+        [
+          "40",
+          "40 %"
+        ]
+      ]
+    },
+    {
+      "key": "music_blur",
+      "label": "音乐背景模糊程度",
+      "type": "choice",
+      "default": "medium",
+      "options": [
+        [
+          "none",
+          "无模糊（调暗封面）"
+        ],
+        [
+          "soft",
+          "柔和"
+        ],
+        [
+          "medium",
+          "中"
+        ],
+        [
+          "strong",
+          "强"
+        ]
+      ]
+    },
+    {
+      "key": "show_arrival",
+      "label": "显示到达时间",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "show_minutes",
+      "label": "显示剩余时间",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "show_distance",
+      "label": "显示剩余距离",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "traffic",
+      "label": "按交通状况为剩余时间着色",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "ampm",
+      "label": "显示上午／下午",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "probe_log",
+      "label": "将全部导航数据保存到 eta-probe.log（诊断用）",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "design",
+      "label": "Cluster Studio 仪表设计（homelab 的 /cluster 页面）",
+      "type": "bool",
+      "default": true
+    }
+  ],
+  "repoCredit": false,
+  "retiredSettings": [
+    "theme"
+  ],
+  "share": [
+    "aref_carlyrics/car/nowplaying.js",
+    "aref_carlyrics/art/artwork.js",
+    "aref_carlyrics/stage/lyrics.js",
+    "aref_carlyrics/vendor/jpeg_decoder.js",
+    "aref_carlyrics/net/http.js"
+  ],
+  "internet": true
+}

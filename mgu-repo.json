@@ -1,16 +1,123 @@
 {
   "schema": 1,
-  "apps": {
-    "path": "apps/*",
-    "manifest": "app.json",
-    "icon": "icon.png",
-    "exclude": ["_template", "wip"],
-    "mguHmi": ["ID7"],
-    "build": {
-      "python": "kit/tools/build.py",
-      "args": ["{id}"],
-      "sdk": "oap-sdk",
-      "output": "dist/{id}@{version}.tgz"
+  "components": [
+    {
+      "id": "aref_carcare",
+      "kind": "app",
+      "path": "apps/aref_carcare",
+      "manifest": "app.zh-CN.json",
+      "title": "车辆养护",
+      "description": "独立记录机油、火花塞、滤芯及各类油液的保养周期，支持首页组件；不重置原车保养提醒。",
+      "mguHmi": [
+        "ID7"
+      ],
+      "requires": {
+        "idrive7-renderd": "2.1.7",
+        "mgu-inputgate": "1.0.0"
+      },
+      "icon": "icon.png",
+      "build": {
+        "python": "localization/build_zh_cn.py",
+        "args": [
+          "{id}"
+        ],
+        "sdk": "oap-sdk",
+        "output": "dist/{id}@{version}.tgz",
+        "shared": [
+          "kit",
+          "apps",
+          "localization"
+        ]
+      }
+    },
+    {
+      "id": "aref_carlyrics",
+      "kind": "app",
+      "path": "apps/aref_carlyrics",
+      "manifest": "app.zh-CN.json",
+      "title": "车载歌词",
+      "description": "根据原车当前曲目显示同步歌词与专辑封面，支持 CarPlay、蓝牙、USB 和首页组件；联网获取歌词。",
+      "mguHmi": [
+        "ID7"
+      ],
+      "requires": {
+        "idrive7-renderd": "2.1.7",
+        "mgu-inputgate": "1.0.0"
+      },
+      "icon": "icon.png",
+      "build": {
+        "python": "localization/build_zh_cn.py",
+        "args": [
+          "{id}"
+        ],
+        "sdk": "oap-sdk",
+        "output": "dist/{id}@{version}.tgz",
+        "shared": [
+          "kit",
+          "apps",
+          "localization"
+        ]
+      }
+    },
+    {
+      "id": "aref_carwatch",
+      "kind": "app",
+      "path": "apps/aref_carwatch",
+      "manifest": "app.zh-CN.json",
+      "title": "车辆监控",
+      "description": "合并行程、失火和故障监控，保留事件发生时的车辆状态，支持首页组件；只读观察车辆数据。",
+      "mguHmi": [
+        "ID7"
+      ],
+      "requires": {
+        "idrive7-renderd": "2.1.7",
+        "mgu-inputgate": "1.0.0"
+      },
+      "icon": "icon.png",
+      "build": {
+        "python": "localization/build_zh_cn.py",
+        "args": [
+          "{id}"
+        ],
+        "sdk": "oap-sdk",
+        "output": "dist/{id}@{version}.tgz",
+        "shared": [
+          "kit",
+          "apps",
+          "localization"
+        ]
+      }
+    },
+    {
+      "id": "aref_eta",
+      "kind": "app",
+      "path": "apps/aref_eta",
+      "manifest": "app.zh-CN.json",
+      "title": "导航到达时间",
+      "description": "显示苹果地图导航的到达时间、剩余时间和距离，支持首页组件及仪表信息条；仪表显示需要渲染组件。",
+      "mguHmi": [
+        "ID7"
+      ],
+      "requires": {
+        "idrive7-renderd": "2.1.7",
+        "mgu-inputgate": "1.0.0",
+        "cluster-render": "0.4.2"
+      },
+      "icon": "icon.png",
+      "build": {
+        "python": "localization/build_zh_cn.py",
+        "args": [
+          "{id}"
+        ],
+        "sdk": "oap-sdk",
+        "output": "dist/{id}@{version}.tgz",
+        "shared": [
+          "kit",
+          "apps",
+          "localization"
+        ]
+      }
     }
-  }
+  ],
+  "tools": []
 }
