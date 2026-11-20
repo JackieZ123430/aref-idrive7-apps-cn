@@ -385,11 +385,28 @@ class Slot {
             }
             if (this.bar && !!bm !== this.barShown) { this.barShown = !!bm; this.cr.set(this.bar, { visible: !!bm }); }
             // the music's backdrop: uploaded once per cover (bg: { px, n } the large cover, from c.music.bg)
-            const bg = show && c && c.music && c.music.bg && this.shape !== 'off' ? c.music.bg : null;
-            if (this.bg && bg && bg !== this.bgCover) { this.bgCover = bg; this.cr.pixels(this.bg, null, drawBackdrop(bg.px, bg.n, this.shape, this.look)); }
-            const bgShow = !!bg;
+            const music = show && c && c.music && this.shape !== 'off';
+            const bg = music && c.music.bg ? c.music.bg : null;
+            // a new song: the last backdrop stays until its cover is ready (no gap), then they cross-fade
+            if (this.bg && bg && bg !== this.bgCover) {
+                const first = !this.bgCover || !this.bgShown;
+                this.bgCover = bg;
+                this._bgSwap(drawBackdrop(bg.px, bg.n, this.shape, this.look), first);
+            }
+            const bgShow = !!(bg || (music && this.bgCover && this.bgShown));
             if (this.bg && bgShow !== this.bgShown) { this.bgShown = bgShow; this.cr.set(this.bg, { visible: bgShow }); }
         } catch (e) { this.note('slot: ' + e.message); }
+    }
+
+    /** New backdrop pixels: at once the first time (the layer fades in itself); else fade out, swap, fade in (~0.5 s). */
+    _bgSwap(px, first) {
+        (this.bgTimers || []).forEach(clearTimeout);
+        this.bgTimers = [];
+        const at = (ms, fn) => this.bgTimers.push(setTimeout(() => { try { fn(); } catch (e) { /* next */ } }, ms));
+        if (first) { this.cr.pixels(this.bg, null, px); this.cr.set(this.bg, { opacity: 1 }); return; }
+        [[0, 0.75], [60, 0.45], [120, 0.15]].forEach((x) => at(x[0], () => this.cr.set(this.bg, { opacity: x[1] })));
+        at(170, () => this.cr.pixels(this.bg, null, px));
+        [[260, 0.35], [330, 0.65], [400, 0.9], [460, 1]].forEach((x) => at(x[0], () => this.cr.set(this.bg, { opacity: x[1] })));
     }
 
     move(place, fit) {
