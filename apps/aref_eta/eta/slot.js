@@ -83,6 +83,12 @@ function draw(c, fonts) {
     } else if (c && c.music) {
         // as BMW's own widget: the picture on top, centred, the title and the artist under it
         const m = c.music, n = m.size || 140, x0 = (SW - n) / 2, y0 = 76 - Math.round((n - 140) / 2);   // grows from its middle
+        if (m.back) {
+            // Settings > soft black behind the cover and names (BMW's widget has one): no edge, just a darker patch
+            const tw = Math.min(SW - 60, Math.max(n, cv.textWidth(fit(m.title, 30, SW - 20, B), 30, B), cv.textWidth(fit(m.artist, 24, SW - 20, M), 24, M)));
+            const bx0 = SW / 2 - tw / 2 - 6, bx1 = SW / 2 + tw / 2 + 6, by0 = y0 - 6, by1 = y0 + n + 86;
+            for (let k = 14; k >= 0; k--) cv.roundRect(bx0 - k * 2, by0 - k * 2, bx1 - bx0 + k * 4, by1 - by0 + k * 4, 18 + k * 2, [0, 0, 0, 8]);
+        }
         if (m.cover && m.cover.px) {
             // the cover, scaled into n x n with rounded corners (nearest from the square it came as)
             const src = m.cover.px, sn = m.cover.n, r = 14;
@@ -277,7 +283,7 @@ class Slot {
         this.fit = Object.assign({ x: 0, y: 0, scale: 1 }, fit);    // the backdrop's own nudge (Moving: backdrop)
         this.ref = null; this.key = null; this.shown = false; this.at = 0; this.pixels = null;
         this.bg = null; this.bgCover = null; this.bgShown = false; this.bar = null; this.barKey = null; this.barShown = false;
-        this.music = { size: 140, bar: 180, thick: 3, time: 'right', back: false }; this.shape = 'bmw'; this.look = Object.assign({}, DEF_LOOK);
+        this.music = { size: 140, bar: 180, thick: 3, time: 'right', back: false, textBack: false }; this.shape = 'bmw'; this.look = Object.assign({}, DEF_LOOK);
     }
 
     /** Settings > backdrop softness, opacity and fade: redrawn at the next update. */
@@ -294,7 +300,7 @@ class Slot {
 
     /** Settings > cover size and bar length (px in the slot's picture). */
     setMusic(o) {
-        const m = Object.assign({ size: 140, bar: 180, thick: 3, time: 'right', back: false }, o);
+        const m = Object.assign({ size: 140, bar: 180, thick: 3, time: 'right', back: false, textBack: false }, o);
         if (JSON.stringify(m) !== JSON.stringify(this.music)) {
             this.music = m; this.key = null; this.barKey = null;
             if (this.bar) { try { const r = this.barRect(); this.cr.set(this.bar, { x: r.x, y: r.y, w: r.w, h: r.h }); } catch (e) { /* next */ } }
@@ -339,7 +345,7 @@ class Slot {
         try {
             const show = !!(want && c);
             if (show) {
-                if (c.music) c.music.size = this.music.size;
+                if (c.music) { c.music.size = this.music.size; c.music.back = !!this.music.textBack; }
                 const key = JSON.stringify(c, (k, v) => (k === 'cover' || k === 'bg' ? (v ? k : null) : k === 'pos' ? undefined : v));
                 const now = Date.now();
                 if (key !== this.key && now - this.at >= MIN_MS) {

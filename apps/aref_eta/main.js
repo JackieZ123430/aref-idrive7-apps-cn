@@ -29,7 +29,7 @@ const NP = require('./nowplaying');
 const ART = require('./artwork');
 const http = require('./http');
 
-const VERSION = '1.18.0';
+const VERSION = '1.19.0';
 const W = 1600, H = 520;
 const LOG_MAX = 512 * 1024;     // eta-probe.log is moved to .1 past this
 const TESTS_MAX = 256 * 1024;   // eta-tests.log: only tests, marks and starts, so a route's data never pushes them out
@@ -219,7 +219,7 @@ mgu.run({
                 const THICK = { thin: 3, medium: 6, thick: 9 };
                 strip.slot.setMusic({ size: SIZE[ctx.settings.get('music_cover_size')] || 140, bar: BAR[ctx.settings.get('music_bar')] || 180,
                     thick: THICK[ctx.settings.get('music_bar_thick')] || 3, time: ctx.settings.get('music_time') === 'above' ? 'above' : 'right',
-                    back: !!ctx.settings.get('music_bar_back') });
+                    back: !!ctx.settings.get('music_bar_back'), textBack: !!ctx.settings.get('music_text_back') });
                 // a BMW message: the second slot fades out with the ETA and back after it, instead of blinking with the cluster's lock
                 strip.slot.update(kind !== 'off' && strip.cfg.on && Date.now() >= (strip.hideUntil || 0), c);   // by itself, as BMW's own widget: not tied to the ETA or the map
             }), 500);
