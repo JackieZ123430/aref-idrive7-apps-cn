@@ -2,7 +2,7 @@
   "id": "aref_carlyrics",
   "title": "车载歌词",
   "description": "根据原车当前曲目显示同步歌词与专辑封面，支持 CarPlay、蓝牙、USB 和首页组件；联网获取歌词。",
-  "version": "0.5.701",
+  "version": "0.5.702",
   "vendor": "aref",
   "loggingId": "OAR1",
   "internet": true,

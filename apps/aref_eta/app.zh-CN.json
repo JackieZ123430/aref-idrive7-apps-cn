@@ -2,7 +2,7 @@
   "id": "aref_eta",
   "title": "导航到达时间",
   "description": "显示苹果地图导航的到达时间、剩余时间和距离，支持首页组件及仪表信息条；仪表显示需要渲染组件。",
-  "version": "1.20.101",
+  "version": "1.20.102",
   "vendor": "aref",
   "loggingId": "OAR7",
   "mguAppStartType": "autostart",

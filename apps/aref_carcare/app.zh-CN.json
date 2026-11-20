@@ -2,7 +2,7 @@
   "id": "aref_carcare",
   "title": "车辆养护",
   "description": "独立记录机油、火花塞、滤芯及各类油液的保养周期，支持首页组件；不重置原车保养提醒。",
-  "version": "0.2.301",
+  "version": "0.2.302",
   "vendor": "aref",
   "loggingId": "OAR4",
   "startWidget": {

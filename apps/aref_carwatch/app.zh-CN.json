@@ -2,7 +2,7 @@
   "id": "aref_carwatch",
   "title": "车辆监控",
   "description": "合并行程、失火和故障监控，保留事件发生时的车辆状态，支持首页组件；只读观察车辆数据。",
-  "version": "0.1.301",
+  "version": "0.1.302",
   "vendor": "aref",
   "loggingId": "OAR8",
   "mguAppStartType": "autostart",

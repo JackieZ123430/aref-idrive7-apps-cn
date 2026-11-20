@@ -4,25 +4,25 @@
     "aref_carcare": {
       "path": "apps/aref_carcare",
       "kitRoot": ".",
-      "version": "0.2.301",
+      "version": "0.2.302",
       "upstreamVersion": "0.2.3"
     },
     "aref_carlyrics": {
       "path": "apps/aref_carlyrics",
       "kitRoot": ".",
-      "version": "0.5.701",
+      "version": "0.5.702",
       "upstreamVersion": "0.5.7"
     },
     "aref_carwatch": {
       "path": "apps/aref_carwatch",
       "kitRoot": ".",
-      "version": "0.1.301",
+      "version": "0.1.302",
       "upstreamVersion": "0.1.3"
     },
     "aref_eta": {
       "path": "apps/aref_eta",
       "kitRoot": ".",
-      "version": "1.20.101",
+      "version": "1.20.102",
       "upstreamVersion": "1.20.1"
     }
   }
