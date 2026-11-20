@@ -35,7 +35,7 @@ const ART = require('./artwork');
 const http = require('./http');
 const HW = require('./kit/homewidget');
 
-const VERSION = '0.5.4';
+const VERSION = '0.5.5';
 const HOMEPAGE = 'https://github.com/arefahmad/idrive7-apps';
 const W = 1600, H = 520;
 const IFACES = [
@@ -245,10 +245,9 @@ mgu.run({
 
             /** The blurred artwork behind everything (or the song's colours), drifting slowly while it plays. */
             /**
-             * Where the kit runs the screen, the HMI's own picture under it is one plain colour (the theme's bg), and
-             * BMW's side bar (the < column) shows it under a light overlay of its own (~13.5 % white, measured on the
-             * car's screen 2026-11-20). So the bg sent is the page's edge colour with that overlay taken back out: the
-             * column then matches the page, song by song.
+             * Where the kit runs the screen, the HMI's own picture under it is one plain colour (the theme's bg); it
+             * shows where the surface is see-through (a few px along the bottom). The back column itself gets the
+             * backdrop drawn into it (bgEdge), so this is just the backdrop's darker lower tone, song by song.
              */
             const THEMES = require('./kit/themes');
             let hmiBgShown = null;
@@ -256,9 +255,9 @@ mgu.run({
                 const c = edgeColour(a, P);
                 if (c === hmiBgShown) return;
                 hmiBgShown = c;
-                const OV = 0.135, n = (i) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16);
-                const v = [0, 1, 2].map((i) => Math.max(0, Math.min(255, Math.round((n(i) - 255 * OV) / (1 - OV)))));
-                const bg = '#' + v.map((x) => ('0' + x.toString(16)).slice(-2)).join('');
+                // what shows in the few px the page doesn't cover (along the bottom): the backdrop's darker lower tone
+                const n = (i) => parseInt(c.slice(1 + i * 2, 3 + i * 2), 16);
+                const bg = '#' + [0, 1, 2].map((i) => ('0' + Math.round(n(i) * 0.62).toString(16)).slice(-2)).join('');
                 if (ctx.setTheme) ctx.setTheme(() => Object.assign({}, THEMES.theme(settings.get('theme')), { bg: bg }));
             }
 
@@ -278,7 +277,8 @@ mgu.run({
                 return edgeCache.c;
             }
 
-            function backdrop(cv, a, now, P, fullH) {
+            function backdrop(cv, a, now, P, fullH, x0) {
+                x0 = x0 || 0;      // < 0: the copy for BMW's back column (bgEdge), so its plain fills start there too
                 if (a) {
                     // two blurred layers of the cover drifting past each other, slowly, as Apple Music's background flows
                     // Settings > Background motion: still (default) or a slow drift, as Apple Music's
@@ -292,12 +292,12 @@ mgu.run({
                     layer(BG2_ID, 1.45, 13, 7, 2);
                     cv.alpha(1);
                 } else {
-                    cv.gradientRect(0, 0, W, fullH, [[0, P.top], [1, P.bottom]]);
+                    cv.gradientRect(x0, 0, W - x0, fullH, [[0, P.top], [1, P.bottom]]);
                     for (let r = 340; r > 20; r -= 16) cv.circle(300, 120, r, G.withAlpha(P.glow, 0.016));
                     for (let r = 300; r > 20; r -= 16) cv.circle(1300, fullH - 60, r, G.withAlpha(P.glow, 0.012));
                 }
                 // a little darker at the top and the bottom, as glass over the artwork
-                cv.gradientRect(0, 0, W, fullH, [[0, G.withAlpha('#000000', 0.3)], [0.45, G.withAlpha('#000000', 0)], [1, G.withAlpha('#000000', 0.4)]]);
+                cv.gradientRect(x0, 0, W - x0, fullH, [[0, G.withAlpha('#000000', 0.3)], [0.45, G.withAlpha('#000000', 0)], [1, G.withAlpha('#000000', 0.4)]]);
             }
 
             function coverColumn(cv, Q, a, P, now) {
@@ -445,14 +445,14 @@ mgu.run({
                 if (!cur) follow();
                 if (!cur) {
                     const P = nameColours('Car Lyrics');
-                    backdrop(cv, null, now, P, fullH); sideBand(null, P);
+                    backdrop(cv, null, now, P, fullH); if (cv.bgEdge) cv.bgEdge(() => backdrop(cv, null, now, P, fullH, -300)); sideBand(null, P); hmiBg(null, P);
                     const cy = A.y + A.h / 2;
                     cv.text('Play a song on your phone', A.x + A.w / 2, cy - 6, 40, WHITE, { font: F_BOLD, align: 'center', literal: true });
                     cv.text('Apple Music over CarPlay, or any app over Bluetooth. The lyrics show up here.', A.x + A.w / 2, cy + 40, 22, G.withAlpha(WHITE, 0.62), { align: 'center', font: F_MED, literal: true });
                 } else {
                     LYR.size = LYR_SIZES[settings.get('lyrics_size')] || 50; LYR.lh = Math.round(LYR.size * 1.2); LYR.gap = Math.round(LYR.size * 0.48);
                     const P = nameColours(cur.title + cur.artist), a = artFor(), Q = sideOn() ? geo(A) : geoGlass(A);
-                    backdrop(cv, a, now, P, fullH); sideBand(a, P); hmiBg(a, P);
+                    backdrop(cv, a, now, P, fullH); if (cv.bgEdge) cv.bgEdge(() => backdrop(cv, a, now, P, fullH, -300)); sideBand(a, P); hmiBg(a, P);
                     if (Q.glass) glassChrome(cv, Q, a, P, now); else { coverColumn(cv, Q, a, P, now); moreButton(cv, A); }
                     const lyr = lyrics.get({ title: cur.title, artist: cur.artist, album: cur.album, duration: cur.duration });
                     if (lyr.state === 'synced' && lyr.lines.length) drawSynced(cv, Q, lyr.lines, now);
